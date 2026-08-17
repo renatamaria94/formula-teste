@@ -65,11 +65,8 @@ PARAMETROS_PADRAO = {
 # ============================================================
 
 PARAMETROS_PESQUISA = {
-
     "0 a 5 p.p.": 0.20,
-
     "5 a 10 p.p.": 0.20,
-
     "10 p.p. ou mais": 0.20
 }
 
@@ -146,6 +143,195 @@ def obter_fator_pesquisa(gap):
 
 
 # ============================================================
+# FUNÇÃO DA PESQUISA
+#
+# REGRA:
+#
+# 1. identifica quem lidera a pesquisa
+# 2. compara o percentual desse candidato na pesquisa
+#    com o percentual dele na simulação
+# 3. se pesquisa <= simulação:
+#       efeito = 0
+# 4. se pesquisa > simulação:
+#       gap = pesquisa - simulação
+#       efeito = gap × fator
+# 5. soma o efeito ao candidato que lidera a pesquisa
+# ============================================================
+
+def aplicar_pesquisa(
+    joao_atual,
+    raquel_atual,
+    pesquisa_joao,
+    pesquisa_raquel
+):
+
+    pesquisa_joao, pesquisa_raquel = normalizar(
+        pesquisa_joao,
+        pesquisa_raquel
+    )
+
+    if pesquisa_joao is None:
+
+        return None
+
+
+    # --------------------------------------------------------
+    # EMPATE NA PESQUISA
+    # --------------------------------------------------------
+
+    if abs(pesquisa_joao - pesquisa_raquel) < 0.000001:
+
+        return {
+
+            "joao_final": joao_atual,
+            "raquel_final": raquel_atual,
+
+            "lider_pesquisa": "Empate",
+
+            "percentual_lider_pesquisa": pesquisa_joao,
+            "percentual_lider_simulacao": None,
+
+            "gap_bruto": 0.0,
+            "gap": 0.0,
+
+            "faixa": None,
+            "fator": 0.0,
+
+            "efeito": 0.0
+        }
+
+
+    # --------------------------------------------------------
+    # JOÃO LIDERA A PESQUISA
+    # --------------------------------------------------------
+
+    if pesquisa_joao > pesquisa_raquel:
+
+        lider_pesquisa = "João Campos"
+
+        percentual_lider_pesquisa = pesquisa_joao
+
+        percentual_lider_simulacao = joao_atual
+
+
+    # --------------------------------------------------------
+    # RAQUEL LIDERA A PESQUISA
+    # --------------------------------------------------------
+
+    else:
+
+        lider_pesquisa = "Raquel Lyra"
+
+        percentual_lider_pesquisa = pesquisa_raquel
+
+        percentual_lider_simulacao = raquel_atual
+
+
+    # --------------------------------------------------------
+    # GAP
+    # --------------------------------------------------------
+
+    gap_bruto = (
+        percentual_lider_pesquisa
+        -
+        percentual_lider_simulacao
+    )
+
+
+    # --------------------------------------------------------
+    # REGRA FUNDAMENTAL
+    #
+    # Se o candidato já tem na simulação um percentual
+    # igual ou superior ao da pesquisa, efeito = zero.
+    # --------------------------------------------------------
+
+    gap = max(
+        gap_bruto,
+        0
+    )
+
+
+    fator = 0.0
+    faixa = None
+    efeito = 0.0
+
+
+    # --------------------------------------------------------
+    # APLICAÇÃO DO FATOR
+    # --------------------------------------------------------
+
+    if gap > 0:
+
+        fator, faixa = obter_fator_pesquisa(
+            gap
+        )
+
+        efeito = (
+            gap *
+            fator
+        )
+
+
+    # --------------------------------------------------------
+    # APLICAÇÃO AO LÍDER DA PESQUISA
+    # --------------------------------------------------------
+
+    if lider_pesquisa == "João Campos":
+
+        joao_final = limitar(
+            joao_atual +
+            efeito
+        )
+
+        raquel_final = (
+            100 -
+            joao_final
+        )
+
+
+    elif lider_pesquisa == "Raquel Lyra":
+
+        raquel_final = limitar(
+            raquel_atual +
+            efeito
+        )
+
+        joao_final = (
+            100 -
+            raquel_final
+        )
+
+
+    else:
+
+        joao_final = joao_atual
+        raquel_final = raquel_atual
+
+
+    return {
+
+        "joao_final": joao_final,
+        "raquel_final": raquel_final,
+
+        "lider_pesquisa": lider_pesquisa,
+
+        "percentual_lider_pesquisa":
+            percentual_lider_pesquisa,
+
+        "percentual_lider_simulacao":
+            percentual_lider_simulacao,
+
+        "gap_bruto": gap_bruto,
+        "gap": gap,
+
+        "faixa": faixa,
+        "fator": fator,
+
+        "efeito": efeito
+    }
+
+
+# ============================================================
 # FUNÇÃO PRINCIPAL
 # ============================================================
 
@@ -159,7 +345,9 @@ def calcular_transferencia(
     usar_base_municipal,
     esquerda_municipio,
     direita_municipio,
-    peso_municipio_pct,
+
+    votos_validos_municipio,
+    votos_validos_estado,
 
     # Prefeito
     usar_prefeito,
@@ -182,9 +370,11 @@ def calcular_transferencia(
     # Pesquisa
     usar_pesquisa,
     abrangencia_pesquisa,
+
     pesquisa_joao,
     pesquisa_raquel,
-    peso_pesquisa_pct
+
+    votos_validos_regiao
 ):
 
 
@@ -202,7 +392,31 @@ def calcular_transferencia(
 
 
     # ========================================================
-    # 2. BASE MUNICIPAL
+    # 2. PESOS AUTOMÁTICOS
+    # ========================================================
+
+    if votos_validos_estado > 0:
+
+        peso_municipio = (
+            votos_validos_municipio
+            /
+            votos_validos_estado
+        )
+
+        peso_regiao = (
+            votos_validos_regiao
+            /
+            votos_validos_estado
+        )
+
+    else:
+
+        peso_municipio = 0
+        peso_regiao = 0
+
+
+    # ========================================================
+    # 3. BASE MUNICIPAL
     # ========================================================
 
     if usar_base_municipal:
@@ -223,12 +437,9 @@ def calcular_transferencia(
         joao_inicial = joao_estado
         raquel_inicial = raquel_estado
 
-        esquerda_municipio = joao_inicial
-        direita_municipio = raquel_inicial
-
 
     # ========================================================
-    # 3. PREFEITO
+    # 4. PREFEITO
     # ========================================================
 
     candidato_apoiado = None
@@ -247,8 +458,9 @@ def calcular_transferencia(
 
     if usar_prefeito:
 
+
         # ----------------------------------------------------
-        # Lado apoiado
+        # CANDIDATO APOIADO
         # ----------------------------------------------------
 
         if lado_prefeito == "Esquerda — João Campos":
@@ -263,7 +475,7 @@ def calcular_transferencia(
 
 
         # ----------------------------------------------------
-        # Gap
+        # GAP
         # ----------------------------------------------------
 
         gap_prefeito_bruto = (
@@ -278,7 +490,7 @@ def calcular_transferencia(
 
 
         # ----------------------------------------------------
-        # Empenho
+        # EMPENHO
         # ----------------------------------------------------
 
         if usar_empenho:
@@ -294,24 +506,26 @@ def calcular_transferencia(
 
 
         # ----------------------------------------------------
-        # Gap restante
+        # GAP RESTANTE
         # ----------------------------------------------------
 
         gap_apos_empenho = max(
-            gap_prefeito -
+            gap_prefeito
+            -
             transferencia_empenho,
             0
         )
 
 
         # ----------------------------------------------------
-        # Avaliação
+        # AVALIAÇÃO
         # ----------------------------------------------------
 
         if usar_avaliacao:
 
             transferencia_avaliacao = (
-                gap_apos_empenho *
+                gap_apos_empenho
+                *
                 avaliacao_fator
             )
 
@@ -321,23 +535,25 @@ def calcular_transferencia(
 
 
         # ----------------------------------------------------
-        # Total prefeito
+        # TOTAL
         # ----------------------------------------------------
 
         transferencia_prefeito = (
-            transferencia_empenho +
+            transferencia_empenho
+            +
             transferencia_avaliacao
         )
 
 
         # ----------------------------------------------------
-        # Resultado
+        # RESULTADO
         # ----------------------------------------------------
 
-        if lado_prefeito == "Esquerda — João Campos":
+        if candidato_apoiado == "João Campos":
 
             joao_apos_prefeito = limitar(
-                joao_inicial +
+                joao_inicial
+                +
                 transferencia_prefeito
             )
 
@@ -349,7 +565,8 @@ def calcular_transferencia(
         else:
 
             raquel_apos_prefeito = limitar(
-                raquel_inicial +
+                raquel_inicial
+                +
                 transferencia_prefeito
             )
 
@@ -358,6 +575,7 @@ def calcular_transferencia(
                 raquel_apos_prefeito
             )
 
+
     else:
 
         joao_apos_prefeito = joao_inicial
@@ -365,40 +583,42 @@ def calcular_transferencia(
 
 
     # ========================================================
-    # 4. LULA
+    # 5. LULA
     # ========================================================
 
     gap_lula_bruto = 0.0
     gap_lula = 0.0
+
     transferencia_lula = 0.0
 
 
     if usar_lula:
 
-        # Lula menos esquerda depois do prefeito
         gap_lula_bruto = (
-            pct_lula -
+            pct_lula
+            -
             joao_apos_prefeito
         )
 
-        # Só gap positivo
         gap_lula = max(
             gap_lula_bruto,
             0
         )
 
         transferencia_lula = (
-            gap_lula *
+            gap_lula
+            *
             lula_fator
         )
 
 
     # ========================================================
-    # 5. RESULTADO DEPOIS DE LULA
+    # 6. RESULTADO APÓS LULA
     # ========================================================
 
     joao_apos_lula = limitar(
-        joao_apos_prefeito +
+        joao_apos_prefeito
+        +
         transferencia_lula
     )
 
@@ -409,238 +629,87 @@ def calcular_transferencia(
 
 
     # ========================================================
-    # 6. PESQUISA
+    # 7. PESQUISA MUNICIPAL
     # ========================================================
 
-    gap_pesquisa_bruto = 0.0
-    gap_pesquisa = 0.0
+    resultado_pesquisa = None
 
-    fator_pesquisa = 0.0
-    faixa_pesquisa = None
-
-    transferencia_pesquisa = 0.0
-
-
-    # ========================================================
-    # PESQUISA MUNICIPAL OU REGIONAL
-    #
-    # Atua sobre o resultado territorial antes da pesquisa.
-    # ========================================================
 
     if (
         usar_pesquisa
-        and abrangencia_pesquisa in ["Município", "Região"]
+        and abrangencia_pesquisa == "Município"
     ):
 
-        pesquisa_joao, pesquisa_raquel = normalizar(
+        resultado_pesquisa = aplicar_pesquisa(
+
+            joao_apos_lula,
+            raquel_apos_lula,
+
             pesquisa_joao,
             pesquisa_raquel
         )
 
-        # ----------------------------------------------------
-        # Pesquisa menos resultado atual de João
-        # ----------------------------------------------------
 
-        gap_pesquisa_bruto = (
-            pesquisa_joao -
-            joao_apos_lula
-        )
-
-
-        # ----------------------------------------------------
-        # Só gap positivo
-        # ----------------------------------------------------
-
-        gap_pesquisa = max(
-            gap_pesquisa_bruto,
-            0
-        )
-
-
-        if gap_pesquisa > 0:
-
-            fator_pesquisa, faixa_pesquisa = (
-                obter_fator_pesquisa(
-                    gap_pesquisa
-                )
-            )
-
-
-            transferencia_pesquisa = (
-                gap_pesquisa *
-                fator_pesquisa
-            )
-
-
-        # ----------------------------------------------------
-        # Resultado após pesquisa
-        # ----------------------------------------------------
-
-        joao_final_municipio = limitar(
-            joao_apos_lula +
-            transferencia_pesquisa
+        joao_final_municipio = (
+            resultado_pesquisa["joao_final"]
         )
 
         raquel_final_municipio = (
-            100 -
-            joao_final_municipio
+            resultado_pesquisa["raquel_final"]
         )
 
-
-    # ========================================================
-    # SEM PESQUISA TERRITORIAL
-    # ========================================================
 
     else:
 
         joao_final_municipio = joao_apos_lula
 
-        raquel_final_municipio = (
-            100 -
-            joao_final_municipio
-        )
+        raquel_final_municipio = raquel_apos_lula
 
 
     # ========================================================
-    # 7. VARIAÇÃO MUNICIPAL TOTAL
+    # 8. VARIAÇÃO MUNICIPAL
     # ========================================================
 
     variacao_municipal_joao = (
-        joao_final_municipio -
+        joao_final_municipio
+        -
         joao_inicial
     )
 
     variacao_municipal_raquel = (
-        raquel_final_municipio -
+        raquel_final_municipio
+        -
         raquel_inicial
     )
 
 
     # ========================================================
-    # 8. PESO DO MUNICÍPIO
-    # ========================================================
-
-    peso_municipio = (
-        peso_municipio_pct /
-        100
-    )
-
-
-    # ========================================================
-    # 9. IMPACTO MUNICIPAL SOBRE O ESTADO
+    # 9. IMPACTO MUNICIPAL EM PERNAMBUCO
     #
     # PASSO 2 (2)
     # ========================================================
 
-    impacto_estado_joao = (
-        variacao_municipal_joao *
-        peso_municipio
-    )
-
-    impacto_estado_raquel = (
-        variacao_municipal_raquel *
+    impacto_municipal_estado_joao = (
+        variacao_municipal_joao
+        *
         peso_municipio
     )
 
 
-    # ========================================================
-    # 10. ESTADO APÓS TRANSFERÊNCIAS TERRITORIAIS
-    # ========================================================
-
-    joao_estado_antes_pesquisa = limitar(
-        joao_estado +
-        impacto_estado_joao
+    joao_estado_apos_municipio = limitar(
+        joao_estado
+        +
+        impacto_municipal_estado_joao
     )
 
-    raquel_estado_antes_pesquisa = (
+    raquel_estado_apos_municipio = (
         100 -
-        joao_estado_antes_pesquisa
+        joao_estado_apos_municipio
     )
 
 
     # ========================================================
-    # 11. PESQUISA ESTADUAL
-    #
-    # Quando a pesquisa é estadual, ela não usa o peso
-    # municipal. Atua diretamente sobre Pernambuco.
-    # ========================================================
-
-    if (
-        usar_pesquisa
-        and abrangencia_pesquisa == "Estado"
-    ):
-
-        pesquisa_joao, pesquisa_raquel = normalizar(
-            pesquisa_joao,
-            pesquisa_raquel
-        )
-
-
-        # ----------------------------------------------------
-        # Pesquisa estadual - cenário estadual atual
-        # ----------------------------------------------------
-
-        gap_pesquisa_bruto = (
-            pesquisa_joao -
-            joao_estado_antes_pesquisa
-        )
-
-
-        gap_pesquisa = max(
-            gap_pesquisa_bruto,
-            0
-        )
-
-
-        if gap_pesquisa > 0:
-
-            fator_pesquisa, faixa_pesquisa = (
-                obter_fator_pesquisa(
-                    gap_pesquisa
-                )
-            )
-
-
-            transferencia_pesquisa = (
-                gap_pesquisa *
-                fator_pesquisa
-            )
-
-
-        # ----------------------------------------------------
-        # Aplicação direta no Estado
-        # ----------------------------------------------------
-
-        joao_estado_final = limitar(
-            joao_estado_antes_pesquisa +
-            transferencia_pesquisa
-        )
-
-        raquel_estado_final = (
-            100 -
-            joao_estado_final
-        )
-
-
-    else:
-
-        joao_estado_final = (
-            joao_estado_antes_pesquisa
-        )
-
-        raquel_estado_final = (
-            raquel_estado_antes_pesquisa
-        )
-
-
-    # ========================================================
-    # 12. PESQUISA REGIONAL
-    #
-    # O resultado regional foi calculado sobre o território.
-    # O peso informado da região define o impacto no Estado.
-    #
-    # Se a pesquisa é municipal, usamos o peso do município.
-    # Se regional, usamos peso_pesquisa_pct.
+    # 10. PESQUISA REGIONAL
     # ========================================================
 
     impacto_pesquisa_estado = 0.0
@@ -651,42 +720,39 @@ def calcular_transferencia(
         and abrangencia_pesquisa == "Região"
     ):
 
-        # Retiramos primeiro a parcela da pesquisa que entrou
-        # na variação municipal com peso municipal.
+        # A pesquisa regional é comparada ao cenário
+        # estadual atual como referência da região.
 
-        efeito_sem_pesquisa = (
-            joao_apos_lula -
-            joao_inicial
-        )
+        resultado_pesquisa = aplicar_pesquisa(
 
-        impacto_sem_pesquisa = (
-            efeito_sem_pesquisa *
-            peso_municipio
-        )
+            joao_estado_apos_municipio,
+            raquel_estado_apos_municipio,
 
-
-        # Efeito específico da pesquisa regional
-        efeito_pesquisa_regional = (
-            transferencia_pesquisa
+            pesquisa_joao,
+            pesquisa_raquel
         )
 
 
-        peso_regiao = (
-            peso_pesquisa_pct /
-            100
+        efeito_pesquisa_regional_joao = (
+            resultado_pesquisa["joao_final"]
+            -
+            joao_estado_apos_municipio
         )
 
+
+        # Efeito regional ponderado pelo peso da região
 
         impacto_pesquisa_estado = (
-            efeito_pesquisa_regional *
+            efeito_pesquisa_regional_joao
+            *
             peso_regiao
         )
 
 
         joao_estado_final = limitar(
-            joao_estado
-            + impacto_sem_pesquisa
-            + impacto_pesquisa_estado
+            joao_estado_apos_municipio
+            +
+            impacto_pesquisa_estado
         )
 
         raquel_estado_final = (
@@ -695,15 +761,71 @@ def calcular_transferencia(
         )
 
 
-        # Corrigir impacto total estadual
-        impacto_estado_joao = (
-            joao_estado_final -
-            joao_estado
+    # ========================================================
+    # 11. PESQUISA ESTADUAL
+    # ========================================================
+
+    elif (
+        usar_pesquisa
+        and abrangencia_pesquisa == "Estado"
+    ):
+
+        resultado_pesquisa = aplicar_pesquisa(
+
+            joao_estado_apos_municipio,
+            raquel_estado_apos_municipio,
+
+            pesquisa_joao,
+            pesquisa_raquel
         )
 
-        impacto_estado_raquel = (
-            -impacto_estado_joao
+
+        # Pesquisa estadual atua diretamente sobre PE
+
+        joao_estado_final = (
+            resultado_pesquisa["joao_final"]
         )
+
+        raquel_estado_final = (
+            resultado_pesquisa["raquel_final"]
+        )
+
+
+        impacto_pesquisa_estado = (
+            joao_estado_final
+            -
+            joao_estado_apos_municipio
+        )
+
+
+    # ========================================================
+    # 12. SEM PESQUISA REGIONAL/ESTADUAL
+    # ========================================================
+
+    else:
+
+        joao_estado_final = (
+            joao_estado_apos_municipio
+        )
+
+        raquel_estado_final = (
+            raquel_estado_apos_municipio
+        )
+
+
+    # ========================================================
+    # 13. IMPACTO TOTAL SOBRE PERNAMBUCO
+    # ========================================================
+
+    impacto_estado_joao = (
+        joao_estado_final
+        -
+        joao_estado
+    )
+
+    impacto_estado_raquel = (
+        -impacto_estado_joao
+    )
 
 
     # ========================================================
@@ -712,20 +834,28 @@ def calcular_transferencia(
 
     return {
 
-        # Estado
+        # Estado inicial
         "joao_estado": joao_estado,
         "raquel_estado": raquel_estado,
 
-        # Município
+        # Município inicial
         "joao_inicial": joao_inicial,
         "raquel_inicial": raquel_inicial,
 
-        "peso_municipio_pct": peso_municipio_pct,
+        # Pesos
         "peso_municipio": peso_municipio,
+        "peso_regiao": peso_regiao,
+
+        "peso_municipio_pct":
+            peso_municipio * 100,
+
+        "peso_regiao_pct":
+            peso_regiao * 100,
 
         # Prefeito
         "usar_prefeito": usar_prefeito,
         "candidato_apoiado": candidato_apoiado,
+
         "pct_prefeito": pct_prefeito,
         "base_apoiado": base_apoiado,
 
@@ -735,19 +865,29 @@ def calcular_transferencia(
         # Empenho
         "usar_empenho": usar_empenho,
         "empenho_fator": empenho_fator,
-        "transferencia_empenho": transferencia_empenho,
+
+        "transferencia_empenho":
+            transferencia_empenho,
+
+        "gap_apos_empenho":
+            gap_apos_empenho,
 
         # Avaliação
         "usar_avaliacao": usar_avaliacao,
         "avaliacao_fator": avaliacao_fator,
-        "gap_apos_empenho": gap_apos_empenho,
-        "transferencia_avaliacao": transferencia_avaliacao,
+
+        "transferencia_avaliacao":
+            transferencia_avaliacao,
 
         # Prefeito total
-        "transferencia_prefeito": transferencia_prefeito,
+        "transferencia_prefeito":
+            transferencia_prefeito,
 
-        "joao_apos_prefeito": joao_apos_prefeito,
-        "raquel_apos_prefeito": raquel_apos_prefeito,
+        "joao_apos_prefeito":
+            joao_apos_prefeito,
+
+        "raquel_apos_prefeito":
+            raquel_apos_prefeito,
 
         # Lula
         "usar_lula": usar_lula,
@@ -757,32 +897,30 @@ def calcular_transferencia(
         "gap_lula": gap_lula,
 
         "lula_fator": lula_fator,
-        "transferencia_lula": transferencia_lula,
 
-        "joao_apos_lula": joao_apos_lula,
-        "raquel_apos_lula": raquel_apos_lula,
+        "transferencia_lula":
+            transferencia_lula,
+
+        "joao_apos_lula":
+            joao_apos_lula,
+
+        "raquel_apos_lula":
+            raquel_apos_lula,
 
         # Pesquisa
         "usar_pesquisa": usar_pesquisa,
-        "abrangencia_pesquisa": abrangencia_pesquisa,
 
-        "pesquisa_joao": pesquisa_joao,
-        "pesquisa_raquel": pesquisa_raquel,
+        "abrangencia_pesquisa":
+            abrangencia_pesquisa,
 
-        "gap_pesquisa_bruto": gap_pesquisa_bruto,
-        "gap_pesquisa": gap_pesquisa,
+        "pesquisa_joao":
+            pesquisa_joao,
 
-        "faixa_pesquisa": faixa_pesquisa,
-        "fator_pesquisa": fator_pesquisa,
+        "pesquisa_raquel":
+            pesquisa_raquel,
 
-        "transferencia_pesquisa":
-            transferencia_pesquisa,
-
-        "peso_pesquisa_pct":
-            peso_pesquisa_pct,
-
-        "impacto_pesquisa_estado":
-            impacto_pesquisa_estado,
+        "resultado_pesquisa":
+            resultado_pesquisa,
 
         # Município final
         "joao_final_municipio":
@@ -798,17 +936,23 @@ def calcular_transferencia(
             variacao_municipal_raquel,
 
         # Estado
+        "impacto_municipal_estado_joao":
+            impacto_municipal_estado_joao,
+
+        "joao_estado_apos_municipio":
+            joao_estado_apos_municipio,
+
+        "raquel_estado_apos_municipio":
+            raquel_estado_apos_municipio,
+
+        "impacto_pesquisa_estado":
+            impacto_pesquisa_estado,
+
         "impacto_estado_joao":
             impacto_estado_joao,
 
         "impacto_estado_raquel":
             impacto_estado_raquel,
-
-        "joao_estado_antes_pesquisa":
-            joao_estado_antes_pesquisa,
-
-        "raquel_estado_antes_pesquisa":
-            raquel_estado_antes_pesquisa,
 
         "joao_estado_final":
             joao_estado_final,
@@ -843,11 +987,6 @@ with aba_simulador:
 
     st.header("Base 0 — Pernambuco")
 
-    st.caption(
-        "Cenário estadual inicial antes das transferências."
-    )
-
-
     c1, c2 = st.columns(2)
 
 
@@ -874,7 +1013,7 @@ with aba_simulador:
 
 
     # ========================================================
-    # MUNICÍPIO
+    # BASE MUNICIPAL
     # ========================================================
 
     st.divider()
@@ -890,7 +1029,7 @@ with aba_simulador:
 
     if usar_base_municipal:
 
-        c1, c2, c3 = st.columns(3)
+        c1, c2 = st.columns(2)
 
 
         with c1:
@@ -915,23 +1054,63 @@ with aba_simulador:
             )
 
 
-        with c3:
+        # ----------------------------------------------------
+        # VOTOS VÁLIDOS
+        #
+        # Estes campos substituem o input manual de peso.
+        # ----------------------------------------------------
 
-            peso_municipio_pct = st.number_input(
-                "Peso do município em Pernambuco (%)",
-                min_value=0.0,
-                max_value=100.0,
-                value=0.36,
-                step=0.01,
-                format="%.2f"
+        st.caption(
+            "O peso eleitoral é calculado automaticamente "
+            "a partir dos votos válidos."
+        )
+
+
+        c1, c2 = st.columns(2)
+
+
+        with c1:
+
+            votos_validos_municipio = st.number_input(
+                "Votos válidos do município",
+                min_value=0,
+                value=18000,
+                step=100
             )
+
+
+        with c2:
+
+            votos_validos_estado = st.number_input(
+                "Votos válidos de Pernambuco",
+                min_value=1,
+                value=5000000,
+                step=1000
+            )
+
+
+        peso_visual = (
+            votos_validos_municipio
+            /
+            votos_validos_estado
+            *
+            100
+        )
+
+
+        st.caption(
+            f"Peso eleitoral calculado automaticamente: "
+            f"**{peso_visual:.3f}%** de Pernambuco."
+        )
 
 
     else:
 
         esquerda_municipio = joao_estado
         direita_municipio = raquel_estado
-        peso_municipio_pct = 0.0
+
+        votos_validos_municipio = 0
+        votos_validos_estado = 5000000
 
 
     # ========================================================
@@ -1119,12 +1298,6 @@ with aba_simulador:
             )
 
 
-        st.caption(
-            "Gap automático: Lula menos João após "
-            "as transferências anteriores."
-        )
-
-
     # ========================================================
     # PESQUISA
     # ========================================================
@@ -1145,7 +1318,7 @@ with aba_simulador:
     pesquisa_joao = 65.0
     pesquisa_raquel = 35.0
 
-    peso_pesquisa_pct = 0.0
+    votos_validos_regiao = 0
 
 
     if usar_pesquisa:
@@ -1158,12 +1331,6 @@ with aba_simulador:
                 "Região",
                 "Estado"
             ]
-        )
-
-
-        st.caption(
-            "A pesquisa aproxima parcialmente o cenário calculado "
-            "do resultado observado na pesquisa."
         )
 
 
@@ -1198,49 +1365,49 @@ with aba_simulador:
 
         if abrangencia_pesquisa == "Região":
 
-            peso_pesquisa_pct = st.number_input(
-                "Peso eleitoral da região em Pernambuco (%)",
-                min_value=0.0,
-                max_value=100.0,
-                value=10.0,
-                step=0.1,
-                help=(
-                    "Percentual dos votos de Pernambuco "
-                    "correspondente à região da pesquisa."
-                )
+            votos_validos_regiao = st.number_input(
+                "Votos válidos da região",
+                min_value=0,
+                value=500000,
+                step=1000
             )
 
 
-        # ----------------------------------------------------
-        # MUNICÍPIO
-        # ----------------------------------------------------
-
-        elif abrangencia_pesquisa == "Município":
-
-            peso_pesquisa_pct = (
-                peso_municipio_pct
+            peso_regiao_visual = (
+                votos_validos_regiao
+                /
+                votos_validos_estado
+                *
+                100
             )
 
+
+            st.caption(
+                f"Peso eleitoral da região calculado: "
+                f"**{peso_regiao_visual:.2f}%** de Pernambuco."
+            )
+
+
+        elif abrangencia_pesquisa == "Estado":
 
             st.info(
-                f"A pesquisa municipal utilizará o peso eleitoral "
-                f"do município: {peso_municipio_pct:.2f}%."
+                "Pesquisa estadual atua diretamente sobre "
+                "o cenário estadual."
             )
 
-
-        # ----------------------------------------------------
-        # ESTADO
-        # ----------------------------------------------------
 
         else:
 
-            peso_pesquisa_pct = 100.0
-
-
             st.info(
-                "A pesquisa estadual atua diretamente sobre "
-                "o cenário de Pernambuco."
+                "Pesquisa municipal atua sobre o resultado "
+                "do município antes da ponderação estadual."
             )
+
+
+        st.caption(
+            "O sistema identifica automaticamente quem lidera "
+            "a pesquisa. O efeito é aplicado somente a esse candidato."
+        )
 
 
     # ========================================================
@@ -1253,29 +1420,47 @@ with aba_simulador:
         raquel_estado=raquel_estado,
 
         usar_base_municipal=usar_base_municipal,
+
         esquerda_municipio=esquerda_municipio,
         direita_municipio=direita_municipio,
-        peso_municipio_pct=peso_municipio_pct,
+
+        votos_validos_municipio=
+            votos_validos_municipio,
+
+        votos_validos_estado=
+            votos_validos_estado,
 
         usar_prefeito=usar_prefeito,
+
         pct_prefeito=pct_prefeito,
+
         lado_prefeito=lado_prefeito,
 
         usar_empenho=usar_empenho,
+
         empenho_fator=empenho_fator,
 
         usar_avaliacao=usar_avaliacao,
+
         avaliacao_fator=avaliacao_fator,
 
         usar_lula=usar_lula,
+
         pct_lula=pct_lula,
+
         lula_fator=lula_fator,
 
         usar_pesquisa=usar_pesquisa,
-        abrangencia_pesquisa=abrangencia_pesquisa,
+
+        abrangencia_pesquisa=
+            abrangencia_pesquisa,
+
         pesquisa_joao=pesquisa_joao,
+
         pesquisa_raquel=pesquisa_raquel,
-        peso_pesquisa_pct=peso_pesquisa_pct
+
+        votos_validos_regiao=
+            votos_validos_regiao
     )
 
 
@@ -1291,7 +1476,7 @@ with aba_simulador:
     if resultado is None:
 
         st.error(
-            "As bases precisam ter soma maior que zero."
+            "Não foi possível calcular o cenário."
         )
 
 
@@ -1310,19 +1495,13 @@ with aba_simulador:
 
         c1.metric(
             "João Campos",
-            f"{resultado['joao_final_municipio']:.2f}%",
-            delta=(
-                f"{resultado['variacao_municipal_joao']:+.2f} p.p."
-            )
+            f"{resultado['joao_final_municipio']:.2f}%"
         )
 
 
         c2.metric(
             "Raquel Lyra",
-            f"{resultado['raquel_final_municipio']:.2f}%",
-            delta=(
-                f"{resultado['variacao_municipal_raquel']:+.2f} p.p."
-            )
+            f"{resultado['raquel_final_municipio']:.2f}%"
         )
 
 
@@ -1379,38 +1558,32 @@ with aba_simulador:
 
 
         # ====================================================
-        # EVOLUÇÃO
+        # EVOLUÇÃO MUNICIPAL
         # ====================================================
 
         st.divider()
 
-        st.header("Evolução do cenário")
+        st.subheader("Evolução no município")
 
 
-        e1, e2, e3, e4 = st.columns(4)
+        c1, c2, c3 = st.columns(3)
 
 
-        e1.metric(
-            "Base municipal",
+        c1.metric(
+            "Base",
             f"{resultado['joao_inicial']:.2f}%"
         )
 
 
-        e2.metric(
+        c2.metric(
             "Após prefeito",
             f"{resultado['joao_apos_prefeito']:.2f}%"
         )
 
 
-        e3.metric(
+        c3.metric(
             "Após Lula",
             f"{resultado['joao_apos_lula']:.2f}%"
-        )
-
-
-        e4.metric(
-            "Após pesquisa",
-            f"{resultado['joao_final_municipio']:.2f}%"
         )
 
 
@@ -1428,27 +1601,21 @@ with aba_simulador:
             expanded=False
         ):
 
+
             if not resultado["usar_prefeito"]:
 
                 st.info(
                     "Prefeito não utilizado."
                 )
 
+
             else:
 
                 st.write(
-                    f"Apoio: **{resultado['candidato_apoiado']}**"
+                    f"Apoia: "
+                    f"**{resultado['candidato_apoiado']}**"
                 )
 
-                st.write(
-                    f"Votação do prefeito: "
-                    f"**{resultado['pct_prefeito']:.2f}%**"
-                )
-
-                st.write(
-                    f"Base do candidato apoiado: "
-                    f"**{resultado['base_apoiado']:.2f}%**"
-                )
 
                 st.code(
                     f"{resultado['pct_prefeito']:.2f} "
@@ -1456,26 +1623,27 @@ with aba_simulador:
                     f"= {resultado['gap_prefeito_bruto']:.2f} p.p."
                 )
 
+
                 if resultado["usar_empenho"]:
 
-                    st.write(
-                        f"Empenho: "
-                        f"**{resultado['gap_prefeito']:.2f} "
+                    st.code(
+                        f"{resultado['gap_prefeito']:.2f} "
                         f"× {resultado['empenho_fator']:.2f} "
-                        f"= {resultado['transferencia_empenho']:.2f} p.p.**"
+                        f"= {resultado['transferencia_empenho']:.2f} p.p."
                     )
+
 
                 if resultado["usar_avaliacao"]:
 
-                    st.write(
-                        f"Avaliação: "
-                        f"**{resultado['gap_apos_empenho']:.2f} "
+                    st.code(
+                        f"{resultado['gap_apos_empenho']:.2f} "
                         f"× {resultado['avaliacao_fator']:.2f} "
-                        f"= {resultado['transferencia_avaliacao']:.2f} p.p.**"
+                        f"= {resultado['transferencia_avaliacao']:.2f} p.p."
                     )
 
+
                 st.success(
-                    f"Efeito total do prefeito: "
+                    f"Efeito total: "
                     f"{resultado['transferencia_prefeito']:.2f} p.p. "
                     f"para {resultado['candidato_apoiado']}."
                 )
@@ -1490,11 +1658,13 @@ with aba_simulador:
             expanded=False
         ):
 
+
             if not resultado["usar_lula"]:
 
                 st.info(
                     "Lula não utilizado."
                 )
+
 
             else:
 
@@ -1504,12 +1674,14 @@ with aba_simulador:
                     f"= {resultado['gap_lula_bruto']:.2f} p.p."
                 )
 
+
                 if resultado["gap_lula"] <= 0:
 
                     st.info(
                         "Gap zero ou negativo. "
-                        "Lula não acrescenta votos."
+                        "Lula não produz efeito."
                     )
+
 
                 else:
 
@@ -1519,10 +1691,11 @@ with aba_simulador:
                         f"= {resultado['transferencia_lula']:.2f} p.p."
                     )
 
+
                     st.success(
-                        f"Lula acrescenta "
-                        f"{resultado['transferencia_lula']:.2f} p.p. "
-                        f"a João."
+                        f"Efeito de Lula: "
+                        f"+{resultado['transferencia_lula']:.2f} p.p. "
+                        f"para João."
                     )
 
 
@@ -1535,18 +1708,33 @@ with aba_simulador:
             expanded=True
         ):
 
+
             if not resultado["usar_pesquisa"]:
 
                 st.info(
                     "Pesquisa não utilizada."
                 )
 
+
+            elif resultado["resultado_pesquisa"] is None:
+
+                st.info(
+                    "Pesquisa sem efeito neste cenário."
+                )
+
+
             else:
+
+                rp = resultado[
+                    "resultado_pesquisa"
+                ]
+
 
                 st.write(
                     f"Abrangência: "
                     f"**{resultado['abrangencia_pesquisa']}**"
                 )
+
 
                 st.write(
                     f"Pesquisa: "
@@ -1555,89 +1743,127 @@ with aba_simulador:
                 )
 
 
-                if resultado["abrangencia_pesquisa"] == "Estado":
+                # --------------------------------------------
+                # EMPATE
+                # --------------------------------------------
 
-                    base_comparacao = (
-                        resultado["joao_estado_antes_pesquisa"]
-                    )
-
-                    st.write(
-                        f"Cenário estadual antes da pesquisa: "
-                        f"**{base_comparacao:.2f}% para João**"
-                    )
-
-                else:
-
-                    base_comparacao = (
-                        resultado["joao_apos_lula"]
-                    )
-
-                    st.write(
-                        f"Cenário antes da pesquisa: "
-                        f"**{base_comparacao:.2f}% para João**"
-                    )
-
-
-                st.code(
-                    f"{resultado['pesquisa_joao']:.2f} "
-                    f"- {base_comparacao:.2f} "
-                    f"= {resultado['gap_pesquisa_bruto']:.2f} p.p."
-                )
-
-
-                if resultado["gap_pesquisa"] <= 0:
+                if rp["lider_pesquisa"] == "Empate":
 
                     st.info(
-                        "A pesquisa está igual ou abaixo do cenário "
-                        "calculado. Portanto, não acrescenta votos."
+                        "A pesquisa está empatada. "
+                        "Nenhum candidato recebe efeito."
                     )
+
+
+                # --------------------------------------------
+                # TEM LÍDER
+                # --------------------------------------------
 
                 else:
 
                     st.write(
-                        f"Faixa: "
-                        f"**{resultado['faixa_pesquisa']}**"
+                        f"Líder da pesquisa: "
+                        f"**{rp['lider_pesquisa']}**"
                     )
+
 
                     st.write(
-                        f"Fator utilizado: "
-                        f"**{resultado['fator_pesquisa']:.2f}**"
+                        f"{rp['lider_pesquisa']} na pesquisa: "
+                        f"**{rp['percentual_lider_pesquisa']:.2f}%**"
                     )
+
+
+                    st.write(
+                        f"{rp['lider_pesquisa']} na simulação "
+                        f"antes da pesquisa: "
+                        f"**{rp['percentual_lider_simulacao']:.2f}%**"
+                    )
+
 
                     st.code(
-                        f"{resultado['gap_pesquisa']:.2f} "
-                        f"× {resultado['fator_pesquisa']:.2f} "
-                        f"= {resultado['transferencia_pesquisa']:.2f} p.p."
+                        f"{rp['percentual_lider_pesquisa']:.2f} "
+                        f"- "
+                        f"{rp['percentual_lider_simulacao']:.2f} "
+                        f"= "
+                        f"{rp['gap_bruto']:.2f} p.p."
                     )
 
-                    st.success(
-                        f"Efeito da pesquisa: "
-                        f"+{resultado['transferencia_pesquisa']:.2f} p.p."
-                    )
+
+                    # ----------------------------------------
+                    # SEM EFEITO
+                    # ----------------------------------------
+
+                    if rp["gap"] <= 0:
+
+                        st.info(
+                            f"{rp['lider_pesquisa']} já possui na "
+                            f"simulação um percentual igual ou maior "
+                            f"que o observado na pesquisa. "
+                            f"Portanto, a pesquisa não produz efeito."
+                        )
+
+
+                    # ----------------------------------------
+                    # COM EFEITO
+                    # ----------------------------------------
+
+                    else:
+
+                        st.write(
+                            f"Faixa: "
+                            f"**{rp['faixa']}**"
+                        )
+
+
+                        st.write(
+                            f"Fator: "
+                            f"**{rp['fator']:.2f}**"
+                        )
+
+
+                        st.code(
+                            f"{rp['gap']:.2f} "
+                            f"× {rp['fator']:.2f} "
+                            f"= {rp['efeito']:.2f} p.p."
+                        )
+
+
+                        st.success(
+                            f"A pesquisa acrescenta "
+                            f"{rp['efeito']:.2f} p.p. "
+                            f"a {rp['lider_pesquisa']}."
+                        )
 
 
         # ====================================================
-        # MEMÓRIA — ESTADO
+        # MEMÓRIA — PERNAMBUCO
         # ====================================================
 
         with st.expander(
-            "4. Impacto sobre Pernambuco",
+            "4. Impacto em Pernambuco",
             expanded=True
         ):
 
+
             st.write(
-                f"Base 0 de Pernambuco: "
+                f"Base 0: "
                 f"**João {resultado['joao_estado']:.2f}% × "
                 f"Raquel {resultado['raquel_estado']:.2f}%**"
             )
 
 
-            if resultado["abrangencia_pesquisa"] != "Estado":
+            st.write(
+                f"Peso eleitoral do município: "
+                f"**{resultado['peso_municipio_pct']:.3f}%**"
+            )
 
-                st.write(
-                    f"Peso do município: "
-                    f"**{resultado['peso_municipio_pct']:.2f}%**"
-                )
+
+            st.code(
+                f"{resultado['variacao_municipal_joao']:+.2f} "
+                f"× {resultado['peso_municipio']:.6f} "
+                f"= "
+                f"{resultado['impacto_municipal_estado_joao']:+.4f} p.p."
+            )
 
 
             if (
@@ -1646,15 +1872,26 @@ with aba_simulador:
             ):
 
                 st.write(
-                    f"Peso da região: "
-                    f"**{resultado['peso_pesquisa_pct']:.2f}%**"
+                    f"Peso eleitoral da região: "
+                    f"**{resultado['peso_regiao_pct']:.2f}%**"
                 )
 
 
-            st.write(
-                f"Impacto líquido sobre João em Pernambuco: "
-                f"**{resultado['impacto_estado_joao']:+.4f} p.p.**"
-            )
+                st.write(
+                    f"Impacto específico da pesquisa regional: "
+                    f"**{resultado['impacto_pesquisa_estado']:+.4f} p.p.**"
+                )
+
+
+            if (
+                resultado["usar_pesquisa"]
+                and resultado["abrangencia_pesquisa"] == "Estado"
+            ):
+
+                st.write(
+                    f"Efeito direto da pesquisa estadual: "
+                    f"**{resultado['impacto_pesquisa_estado']:+.2f} p.p.**"
+                )
 
 
             st.success(
@@ -1672,7 +1909,7 @@ with aba_simulador:
 
 
 # ============================================================
-# ABA — PARÂMETROS
+# ABA — CONFIGURAR PARÂMETROS
 # ============================================================
 
 with aba_parametros:
@@ -1680,14 +1917,14 @@ with aba_parametros:
 
     st.header("Configurar parâmetros")
 
-    st.caption(
-        "Os parâmetros são independentes e podem ser alterados "
-        "livremente nesta sessão."
+    st.write(
+        "Todos os parâmetros podem ser alterados "
+        "independentemente."
     )
 
 
     # ========================================================
-    # EDITOR PADRÃO
+    # EDITOR
     # ========================================================
 
     def criar_editor_parametros(
@@ -1696,9 +1933,11 @@ with aba_parametros:
         descricao
     ):
 
+
         st.subheader(titulo)
 
         st.caption(descricao)
+
 
         cols = st.columns(5)
 
@@ -1710,6 +1949,7 @@ with aba_parametros:
                 st.markdown(
                     f"**{categoria}**"
                 )
+
 
                 st.number_input(
                     "Fator",
@@ -1729,7 +1969,7 @@ with aba_parametros:
     criar_editor_parametros(
         "Empenho do prefeito",
         "empenho",
-        "Parâmetros do efeito do empenho sobre o gap do prefeito."
+        "Quanto do gap do prefeito é mobilizado pelo empenho."
     )
 
 
@@ -1743,7 +1983,7 @@ with aba_parametros:
     criar_editor_parametros(
         "Avaliação do prefeito",
         "avaliacao",
-        "Parâmetros da avaliação sobre o gap restante."
+        "Quanto do gap restante é mobilizado pela avaliação."
     )
 
 
@@ -1757,22 +1997,21 @@ with aba_parametros:
     criar_editor_parametros(
         "Efeito de Lula",
         "lula",
-        "Parâmetros da transferência do gap positivo de Lula."
+        "Quanto do gap positivo de Lula é transferido para João."
     )
-
-
-    st.divider()
 
 
     # ========================================================
     # PESQUISA
     # ========================================================
 
+    st.divider()
+
     st.subheader("Efeito da pesquisa")
 
     st.caption(
-        "Percentual do gap entre o cenário calculado "
-        "e o resultado da pesquisa que será incorporado."
+        "O fator é aplicado ao gap positivo do candidato "
+        "que estiver liderando a pesquisa."
     )
 
 
@@ -1786,7 +2025,7 @@ with aba_parametros:
         )
 
         st.number_input(
-            "Fator 0–5",
+            "Fator",
             min_value=0.0,
             max_value=10.0,
             step=0.05,
@@ -1803,7 +2042,7 @@ with aba_parametros:
         )
 
         st.number_input(
-            "Fator 5–10",
+            "Fator",
             min_value=0.0,
             max_value=10.0,
             step=0.05,
@@ -1820,7 +2059,7 @@ with aba_parametros:
         )
 
         st.number_input(
-            "Fator 10+",
+            "Fator",
             min_value=0.0,
             max_value=10.0,
             step=0.05,
@@ -1843,8 +2082,7 @@ with aba_parametros:
 
 
     if st.button(
-        "Restaurar valores sugeridos",
-        type="secondary"
+        "Restaurar valores sugeridos"
     ):
 
 
