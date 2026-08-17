@@ -16,7 +16,7 @@ st.caption("João Campos × Raquel Lyra")
 
 
 # ============================================================
-# CATEGORIAS
+# CATEGORIAS E PARÂMETROS SUGERIDOS
 # ============================================================
 
 CATEGORIAS = [
@@ -26,22 +26,6 @@ CATEGORIAS = [
     "Forte",
     "Muito forte"
 ]
-
-
-# ============================================================
-# PARÂMETROS SUGERIDOS
-#
-# IMPORTANTE:
-# Cada variável possui sua própria escala.
-#
-# Portanto:
-#
-# Forte no empenho pode ser 0.80
-# Forte na avaliação pode ser 1.20
-# Forte em Lula pode ser 0.60
-#
-# sem que uma alteração afete as outras.
-# ============================================================
 
 PARAMETROS_PADRAO = {
 
@@ -72,7 +56,7 @@ PARAMETROS_PADRAO = {
 
 
 # ============================================================
-# INICIALIZAR SESSION STATE
+# INICIALIZAR PARÂMETROS
 # ============================================================
 
 for variavel, escala in PARAMETROS_PADRAO.items():
@@ -90,31 +74,20 @@ for variavel, escala in PARAMETROS_PADRAO.items():
 # ============================================================
 
 def limitar(valor, minimo=0.0, maximo=100.0):
-    """
-    Mantém o resultado eleitoral entre 0% e 100%.
-    """
     return max(minimo, min(maximo, valor))
 
 
-def normalizar(esquerda, direita):
-    """
-    Normaliza os dois lados para que somem 100%.
-    """
+def normalizar(a, b):
 
-    total = esquerda + direita
+    total = a + b
 
     if total <= 0:
         return None, None
 
-    esquerda_norm = (
-        esquerda / total
-    ) * 100
-
-    direita_norm = (
-        direita / total
-    ) * 100
-
-    return esquerda_norm, direita_norm
+    return (
+        a / total * 100,
+        b / total * 100
+    )
 
 
 # ============================================================
@@ -122,14 +95,25 @@ def normalizar(esquerda, direita):
 # ============================================================
 
 def calcular_transferencia(
+
     joao_estado,
     raquel_estado,
+
+    usar_base_municipal,
     esquerda_municipio,
     direita_municipio,
+
+    usar_prefeito,
     pct_prefeito,
     lado_prefeito,
+
+    usar_empenho,
     empenho_fator,
+
+    usar_avaliacao,
     avaliacao_fator,
+
+    usar_lula,
     pct_lula,
     lula_fator
 ):
@@ -148,263 +132,266 @@ def calcular_transferencia(
 
 
     # ========================================================
-    # 2. BASE MUNICIPAL
+    # 2. BASE MUNICIPAL — OPCIONAL
+    #
+    # Se ligada:
+    # usa a distribuição esquerda/direita do município.
+    #
+    # Se desligada:
+    # mantém a Base 0 estadual.
     # ========================================================
 
-    esquerda_municipio, direita_municipio = normalizar(
-        esquerda_municipio,
-        direita_municipio
-    )
+    if usar_base_municipal:
 
-    if esquerda_municipio is None:
-        return None
-
-
-    # ========================================================
-    # 3. AJUSTE TERRITORIAL
-    #
-    # Mede quanto o município é mais ou menos de esquerda
-    # do que a Base 0 estadual.
-    #
-    # Exemplo:
-    #
-    # João PE = 56%
-    # Esquerda municipal = 67%
-    #
-    # diferencial = +11 p.p.
-    #
-    # Portanto:
-    #
-    # João inicial no município = 67%
-    # Raquel inicial = 33%
-    # ========================================================
-
-    diferencial_municipal = (
-        esquerda_municipio -
-        joao_estado
-    )
-
-    joao_inicial = (
-        joao_estado +
-        diferencial_municipal
-    )
-
-    joao_inicial = limitar(
-        joao_inicial
-    )
-
-    raquel_inicial = (
-        100 -
-        joao_inicial
-    )
-
-
-    # ========================================================
-    # 4. IDENTIFICAR CANDIDATO APOIADO PELO PREFEITO
-    # ========================================================
-
-    if lado_prefeito == "Esquerda — João Campos":
-
-        candidato_apoiado = "João Campos"
-
-        base_apoiado = joao_inicial
-
-    else:
-
-        candidato_apoiado = "Raquel Lyra"
-
-        base_apoiado = raquel_inicial
-
-
-    # ========================================================
-    # 5. GAP DO PREFEITO
-    #
-    # votação do prefeito
-    # -
-    # base do candidato que ele apoia
-    #
-    # Exemplo:
-    #
-    # Prefeito = 65%
-    # Raquel = 44%
-    #
-    # Gap = 21 p.p.
-    #
-    # Se o resultado for <= 0:
-    # não existe gap disponível.
-    # ========================================================
-
-    gap_prefeito_bruto = (
-        pct_prefeito -
-        base_apoiado
-    )
-
-    gap_prefeito = max(
-        gap_prefeito_bruto,
-        0
-    )
-
-
-    # ========================================================
-    # 6. EMPENHO DO PREFEITO
-    #
-    # gap × fator de empenho
-    #
-    # Exemplo:
-    #
-    # gap = 21
-    # Forte = 0.80
-    #
-    # 21 × 0.80 = 16.8 p.p.
-    # ========================================================
-
-    transferencia_empenho = (
-        gap_prefeito *
-        empenho_fator
-    )
-
-
-    # ========================================================
-    # 7. AVALIAÇÃO DO PREFEITO
-    #
-    # A avaliação atua SOBRE A TRANSFERÊNCIA.
-    #
-    # transferência do empenho × fator de avaliação
-    #
-    # IMPORTANTE:
-    #
-    # O fator pode ser maior que 1.
-    #
-    # Exemplo:
-    #
-    # transferência = 16.8
-    # avaliação = 1.20
-    #
-    # 16.8 × 1.20 = 20.16 p.p.
-    #
-    # Portanto, NÃO limitamos ao gap original.
-    # ========================================================
-
-    transferencia_prefeito = (
-        transferencia_empenho *
-        avaliacao_fator
-    )
-
-    transferencia_prefeito = max(
-        transferencia_prefeito,
-        0
-    )
-
-
-    # ========================================================
-    # 8. RESULTADO APÓS PREFEITO
-    # ========================================================
-
-    if lado_prefeito == "Esquerda — João Campos":
-
-        joao_apos_prefeito = (
-            joao_inicial +
-            transferencia_prefeito
+        esquerda_municipio, direita_municipio = normalizar(
+            esquerda_municipio,
+            direita_municipio
         )
 
-        joao_apos_prefeito = limitar(
-            joao_apos_prefeito
+        if esquerda_municipio is None:
+            return None
+
+        diferencial_municipal = (
+            esquerda_municipio -
+            joao_estado
         )
 
-        raquel_apos_prefeito = (
-            100 -
-            joao_apos_prefeito
+        joao_inicial = limitar(
+            joao_estado +
+            diferencial_municipal
+        )
+
+        raquel_inicial = (
+            100 - joao_inicial
         )
 
     else:
 
-        raquel_apos_prefeito = (
-            raquel_inicial +
-            transferencia_prefeito
+        esquerda_municipio = None
+        direita_municipio = None
+
+        diferencial_municipal = 0
+
+        joao_inicial = joao_estado
+        raquel_inicial = raquel_estado
+
+
+    # ========================================================
+    # VALORES INICIAIS DOS EFEITOS
+    # ========================================================
+
+    candidato_apoiado = None
+    base_apoiado = None
+
+    gap_prefeito_bruto = 0
+    gap_prefeito = 0
+
+    transferencia_empenho = 0
+    gap_apos_empenho = 0
+
+    transferencia_avaliacao = 0
+    transferencia_prefeito = 0
+
+
+    # ========================================================
+    # 3. PREFEITO — OPCIONAL
+    # ========================================================
+
+    if usar_prefeito:
+
+        # ----------------------------------------------------
+        # Candidato apoiado
+        # ----------------------------------------------------
+
+        if lado_prefeito == "Esquerda — João Campos":
+
+            candidato_apoiado = "João Campos"
+            base_apoiado = joao_inicial
+
+        else:
+
+            candidato_apoiado = "Raquel Lyra"
+            base_apoiado = raquel_inicial
+
+
+        # ----------------------------------------------------
+        # Gap do prefeito
+        # ----------------------------------------------------
+
+        gap_prefeito_bruto = (
+            pct_prefeito -
+            base_apoiado
         )
 
-        raquel_apos_prefeito = limitar(
-            raquel_apos_prefeito
-        )
-
-        joao_apos_prefeito = (
-            100 -
-            raquel_apos_prefeito
+        gap_prefeito = max(
+            gap_prefeito_bruto,
+            0
         )
 
 
+        # ====================================================
+        # 4. EMPENHO — OPCIONAL
+        #
+        # Se ligado:
+        # gap × fator
+        #
+        # Se desligado:
+        # efeito = 0
+        # ====================================================
+
+        if usar_empenho:
+
+            transferencia_empenho = (
+                gap_prefeito *
+                empenho_fator
+            )
+
+            transferencia_empenho = max(
+                transferencia_empenho,
+                0
+            )
+
+        else:
+
+            transferencia_empenho = 0
+
+
+        # ====================================================
+        # 5. GAP RESTANTE APÓS EMPENHO
+        # ====================================================
+
+        gap_apos_empenho = max(
+            gap_prefeito -
+            transferencia_empenho,
+            0
+        )
+
+
+        # ====================================================
+        # 6. AVALIAÇÃO — OPCIONAL
+        #
+        # A avaliação atua sobre o que RESTOU do gap.
+        #
+        # Isso significa que avaliação desligada ou = 0
+        # NÃO apaga o efeito do empenho.
+        # ====================================================
+
+        if usar_avaliacao:
+
+            transferencia_avaliacao = (
+                gap_apos_empenho *
+                avaliacao_fator
+            )
+
+            transferencia_avaliacao = max(
+                transferencia_avaliacao,
+                0
+            )
+
+        else:
+
+            transferencia_avaliacao = 0
+
+
+        # ====================================================
+        # 7. EFEITO TOTAL DO PREFEITO
+        # ====================================================
+
+        transferencia_prefeito = (
+            transferencia_empenho +
+            transferencia_avaliacao
+        )
+
+
+        # ====================================================
+        # 8. RESULTADO APÓS PREFEITO
+        # ====================================================
+
+        if lado_prefeito == "Esquerda — João Campos":
+
+            joao_apos_prefeito = limitar(
+                joao_inicial +
+                transferencia_prefeito
+            )
+
+            raquel_apos_prefeito = (
+                100 -
+                joao_apos_prefeito
+            )
+
+        else:
+
+            raquel_apos_prefeito = limitar(
+                raquel_inicial +
+                transferencia_prefeito
+            )
+
+            joao_apos_prefeito = (
+                100 -
+                raquel_apos_prefeito
+            )
+
+    else:
+
+        # Prefeito desligado:
+        # cenário permanece igual ao ponto inicial.
+
+        joao_apos_prefeito = joao_inicial
+        raquel_apos_prefeito = raquel_inicial
+
+
     # ========================================================
-    # 9. GAP DE LULA
-    #
-    # IMPORTANTE:
-    #
-    # O gap NÃO é um parâmetro digitado.
-    #
-    # Ele é calculado automaticamente DEPOIS
-    # do efeito do prefeito.
-    #
-    # Fórmula:
-    #
-    # Lula no município
-    # -
-    # João após transferências anteriores
-    #
-    # Se <= 0:
-    # Lula não entra.
+    # 9. LULA — OPCIONAL
     # ========================================================
 
-    gap_lula_bruto = (
-        pct_lula -
-        joao_apos_prefeito
-    )
-
-    gap_lula = max(
-        gap_lula_bruto,
-        0
-    )
+    gap_lula_bruto = 0
+    gap_lula = 0
+    transferencia_lula = 0
 
 
-    # ========================================================
-    # 10. EFEITO DE LULA
-    #
-    # gap automático × fator escolhido
-    #
-    # O fator também pode ser > 1.
-    #
-    # Exemplo:
-    #
-    # gap Lula = 20
-    # Forte = 0.80
-    #
-    # efeito = 16 p.p.
-    #
-    # Se Forte for alterado para 1.20:
-    #
-    # efeito = 24 p.p.
-    # ========================================================
+    if usar_lula:
 
-    transferencia_lula = (
-        gap_lula *
-        lula_fator
-    )
+        # ----------------------------------------------------
+        # GAP AUTOMÁTICO
+        #
+        # Lula
+        # -
+        # esquerda depois de tudo que veio antes
+        # ----------------------------------------------------
 
-    transferencia_lula = max(
-        transferencia_lula,
-        0
-    )
+        gap_lula_bruto = (
+            pct_lula -
+            joao_apos_prefeito
+        )
+
+        gap_lula = max(
+            gap_lula_bruto,
+            0
+        )
+
+
+        # ----------------------------------------------------
+        # Transferência
+        # ----------------------------------------------------
+
+        transferencia_lula = (
+            gap_lula *
+            lula_fator
+        )
+
+        transferencia_lula = max(
+            transferencia_lula,
+            0
+        )
 
 
     # ========================================================
-    # 11. RESULTADO FINAL
+    # 10. RESULTADO FINAL
     # ========================================================
-
-    joao_final = (
-        joao_apos_prefeito +
-        transferencia_lula
-    )
 
     joao_final = limitar(
-        joao_final
+        joao_apos_prefeito +
+        transferencia_lula
     )
 
     raquel_final = (
@@ -419,97 +406,58 @@ def calcular_transferencia(
 
     return {
 
-        # Base estadual
-        "joao_estado":
-            joao_estado,
+        # Estado
+        "joao_estado": joao_estado,
+        "raquel_estado": raquel_estado,
 
-        "raquel_estado":
-            raquel_estado,
+        # Município
+        "usar_base_municipal": usar_base_municipal,
+        "esquerda_municipio": esquerda_municipio,
+        "direita_municipio": direita_municipio,
+        "diferencial_municipal": diferencial_municipal,
 
-
-        # Base municipal
-        "esquerda_municipio":
-            esquerda_municipio,
-
-        "direita_municipio":
-            direita_municipio,
-
-        "diferencial_municipal":
-            diferencial_municipal,
-
-
-        # Inicial municipal
-        "joao_inicial":
-            joao_inicial,
-
-        "raquel_inicial":
-            raquel_inicial,
-
+        # Inicial
+        "joao_inicial": joao_inicial,
+        "raquel_inicial": raquel_inicial,
 
         # Prefeito
-        "candidato_apoiado":
-            candidato_apoiado,
+        "usar_prefeito": usar_prefeito,
+        "candidato_apoiado": candidato_apoiado,
+        "base_apoiado": base_apoiado,
+        "pct_prefeito": pct_prefeito,
 
-        "pct_prefeito":
-            pct_prefeito,
-
-        "base_apoiado":
-            base_apoiado,
-
-        "gap_prefeito_bruto":
-            gap_prefeito_bruto,
-
-        "gap_prefeito":
-            gap_prefeito,
-
+        "gap_prefeito_bruto": gap_prefeito_bruto,
+        "gap_prefeito": gap_prefeito,
 
         # Empenho
-        "empenho_fator":
-            empenho_fator,
-
-        "transferencia_empenho":
-            transferencia_empenho,
-
+        "usar_empenho": usar_empenho,
+        "empenho_fator": empenho_fator,
+        "transferencia_empenho": transferencia_empenho,
 
         # Avaliação
-        "avaliacao_fator":
-            avaliacao_fator,
+        "usar_avaliacao": usar_avaliacao,
+        "avaliacao_fator": avaliacao_fator,
+        "gap_apos_empenho": gap_apos_empenho,
+        "transferencia_avaliacao": transferencia_avaliacao,
 
-        "transferencia_prefeito":
-            transferencia_prefeito,
-
+        # Total prefeito
+        "transferencia_prefeito": transferencia_prefeito,
 
         # Após prefeito
-        "joao_apos_prefeito":
-            joao_apos_prefeito,
-
-        "raquel_apos_prefeito":
-            raquel_apos_prefeito,
-
+        "joao_apos_prefeito": joao_apos_prefeito,
+        "raquel_apos_prefeito": raquel_apos_prefeito,
 
         # Lula
-        "pct_lula":
-            pct_lula,
-
-        "gap_lula_bruto":
-            gap_lula_bruto,
-
-        "gap_lula":
-            gap_lula,
-
-        "lula_fator":
-            lula_fator,
-
-        "transferencia_lula":
-            transferencia_lula,
-
+        "usar_lula": usar_lula,
+        "pct_lula": pct_lula,
+        "gap_lula_bruto": gap_lula_bruto,
+        "gap_lula": gap_lula,
+        "lula_fator": lula_fator,
+        "transferencia_lula": transferencia_lula,
 
         # Final
-        "joao_final":
-            joao_final,
-
-        "raquel_final":
-            raquel_final
+        "joao_final": joao_final,
+        "raquel_final": raquel_final
     }
 
 
@@ -532,229 +480,323 @@ aba_simulador, aba_parametros = st.tabs(
 with aba_simulador:
 
     # ========================================================
-    # DADOS DO CENÁRIO
+    # BASE 0
     # ========================================================
 
-    st.header("Dados do cenário")
+    st.header("Base 0 — Pernambuco")
 
-    st.caption(
-        "Informe os dados eleitorais utilizados na simulação."
-    )
+    c1, c2 = st.columns(2)
 
-    col1, col2, col3 = st.columns(3)
-
-
-    # --------------------------------------------------------
-    # BASE ESTADUAL
-    # --------------------------------------------------------
-
-    with col1:
-
-        st.subheader("Base 0 — Pernambuco")
+    with c1:
 
         joao_estado = st.number_input(
             "João Campos — Estado (%)",
             min_value=0.0,
             max_value=100.0,
             value=56.0,
-            step=0.1,
-            key="joao_estado"
+            step=0.1
         )
+
+    with c2:
 
         raquel_estado = st.number_input(
             "Raquel Lyra — Estado (%)",
             min_value=0.0,
             max_value=100.0,
             value=44.0,
-            step=0.1,
-            key="raquel_estado"
-        )
-
-
-    # --------------------------------------------------------
-    # BASE MUNICIPAL
-    # --------------------------------------------------------
-
-    with col2:
-
-        st.subheader("Base do município")
-
-        esquerda_municipio = st.number_input(
-            "Esquerda no município (%)",
-            min_value=0.0,
-            max_value=100.0,
-            value=67.0,
-            step=0.1,
-            key="esquerda_municipio"
-        )
-
-        direita_municipio = st.number_input(
-            "Direita no município (%)",
-            min_value=0.0,
-            max_value=100.0,
-            value=33.0,
-            step=0.1,
-            key="direita_municipio"
-        )
-
-
-    # --------------------------------------------------------
-    # DADOS LOCAIS
-    # --------------------------------------------------------
-
-    with col3:
-
-        st.subheader("Dados locais")
-
-        pct_prefeito = st.number_input(
-            "Votação do prefeito (%)",
-            min_value=0.0,
-            max_value=100.0,
-            value=56.0,
-            step=0.1,
-            key="pct_prefeito"
-        )
-
-        lado_prefeito = st.selectbox(
-            "Quem o prefeito apoia?",
-            [
-                "Esquerda — João Campos",
-                "Direita — Raquel Lyra"
-            ],
-            index=1,
-            key="lado_prefeito"
-        )
-
-        pct_lula = st.number_input(
-            "Votação de Lula no município (%)",
-            min_value=0.0,
-            max_value=100.0,
-            value=86.0,
-            step=0.1,
-            key="pct_lula"
+            step=0.1
         )
 
 
     # ========================================================
-    # INTENSIDADE DOS EFEITOS
+    # BASE MUNICIPAL
     # ========================================================
 
     st.divider()
 
-    st.header("Intensidade dos efeitos")
+    st.header("Base do município")
 
-    st.caption(
-        "Cada variável possui sua própria escala de parâmetros. "
-        "Os valores podem ser alterados na aba "
-        "“Configurar parâmetros”."
+    usar_base_municipal = st.toggle(
+        "Usar base municipal",
+        value=True,
+        help=(
+            "Se desligado, o município começa diretamente "
+            "com a Base 0 de Pernambuco."
+        )
     )
 
-    i1, i2, i3 = st.columns(3)
 
+    if usar_base_municipal:
 
-    # --------------------------------------------------------
-    # EMPENHO
-    # --------------------------------------------------------
+        c1, c2 = st.columns(2)
 
-    with i1:
+        with c1:
 
-        st.subheader("Empenho do prefeito")
+            esquerda_municipio = st.number_input(
+                "Esquerda no município (%)",
+                min_value=0.0,
+                max_value=100.0,
+                value=67.0,
+                step=0.1
+            )
 
-        categoria_empenho = st.selectbox(
-            "Nível de empenho",
-            CATEGORIAS,
-            index=3,
-            key="categoria_empenho"
-        )
+        with c2:
 
-        empenho_fator = st.session_state[
-            f"param_empenho_{categoria_empenho}"
-        ]
+            direita_municipio = st.number_input(
+                "Direita no município (%)",
+                min_value=0.0,
+                max_value=100.0,
+                value=33.0,
+                step=0.1
+            )
 
-        st.metric(
-            "Fator utilizado",
-            f"{empenho_fator:.2f}"
-        )
+    else:
 
+        esquerda_municipio = joao_estado
+        direita_municipio = raquel_estado
 
-    # --------------------------------------------------------
-    # AVALIAÇÃO
-    # --------------------------------------------------------
-
-    with i2:
-
-        st.subheader("Avaliação do prefeito")
-
-        categoria_avaliacao = st.selectbox(
-            "Nível de avaliação",
-            CATEGORIAS,
-            index=2,
-            key="categoria_avaliacao"
-        )
-
-        avaliacao_fator = st.session_state[
-            f"param_avaliacao_{categoria_avaliacao}"
-        ]
-
-        st.metric(
-            "Fator utilizado",
-            f"{avaliacao_fator:.2f}"
-        )
-
-
-    # --------------------------------------------------------
-    # LULA
-    # --------------------------------------------------------
-
-    with i3:
-
-        st.subheader("Efeito de Lula")
-
-        categoria_lula = st.selectbox(
-            "Intensidade do efeito",
-            CATEGORIAS,
-            index=2,
-            key="categoria_lula"
-        )
-
-        lula_fator = st.session_state[
-            f"param_lula_{categoria_lula}"
-        ]
-
-        st.metric(
-            "Fator utilizado",
-            f"{lula_fator:.2f}"
-        )
-
-        st.caption(
-            "O gap de Lula é calculado automaticamente."
+        st.info(
+            "Base municipal desativada. "
+            "O cálculo parte diretamente da Base 0 estadual."
         )
 
 
     # ========================================================
-    # CÁLCULO
+    # PREFEITO
+    # ========================================================
+
+    st.divider()
+
+    st.header("Prefeito")
+
+    usar_prefeito = st.toggle(
+        "Incluir efeito do prefeito",
+        value=True
+    )
+
+
+    # Defaults necessários mesmo quando desligado
+    pct_prefeito = 0.0
+    lado_prefeito = "Esquerda — João Campos"
+
+    usar_empenho = False
+    usar_avaliacao = False
+
+    categoria_empenho = "Muito fraco"
+    categoria_avaliacao = "Muito fraco"
+
+    empenho_fator = 0.0
+    avaliacao_fator = 0.0
+
+
+    if usar_prefeito:
+
+        c1, c2 = st.columns(2)
+
+        with c1:
+
+            pct_prefeito = st.number_input(
+                "Votação do prefeito (%)",
+                min_value=0.0,
+                max_value=100.0,
+                value=65.0,
+                step=0.1
+            )
+
+        with c2:
+
+            lado_prefeito = st.selectbox(
+                "Quem o prefeito apoia?",
+                [
+                    "Esquerda — João Campos",
+                    "Direita — Raquel Lyra"
+                ]
+            )
+
+
+        # ====================================================
+        # EMPENHO E AVALIAÇÃO
+        # ====================================================
+
+        p1, p2 = st.columns(2)
+
+
+        # ----------------------------------------------------
+        # EMPENHO
+        # ----------------------------------------------------
+
+        with p1:
+
+            st.subheader("Empenho")
+
+            usar_empenho = st.toggle(
+                "Usar empenho",
+                value=True
+            )
+
+
+            if usar_empenho:
+
+                categoria_empenho = st.selectbox(
+                    "Nível de empenho",
+                    CATEGORIAS,
+                    index=3
+                )
+
+                empenho_fator = st.session_state[
+                    f"param_empenho_{categoria_empenho}"
+                ]
+
+                st.metric(
+                    "Fator",
+                    f"{empenho_fator:.2f}"
+                )
+
+            else:
+
+                empenho_fator = 0.0
+
+                st.caption(
+                    "Empenho não será considerado."
+                )
+
+
+        # ----------------------------------------------------
+        # AVALIAÇÃO
+        # ----------------------------------------------------
+
+        with p2:
+
+            st.subheader("Avaliação")
+
+            usar_avaliacao = st.toggle(
+                "Usar avaliação",
+                value=True
+            )
+
+
+            if usar_avaliacao:
+
+                categoria_avaliacao = st.selectbox(
+                    "Nível de avaliação",
+                    CATEGORIAS,
+                    index=2
+                )
+
+                avaliacao_fator = st.session_state[
+                    f"param_avaliacao_{categoria_avaliacao}"
+                ]
+
+                st.metric(
+                    "Fator",
+                    f"{avaliacao_fator:.2f}"
+                )
+
+            else:
+
+                avaliacao_fator = 0.0
+
+                st.caption(
+                    "Avaliação não será considerada."
+                )
+
+    else:
+
+        st.info(
+            "O efeito do prefeito foi desativado. "
+            "Empenho e avaliação também não entram no cálculo."
+        )
+
+
+    # ========================================================
+    # LULA
+    # ========================================================
+
+    st.divider()
+
+    st.header("Lula")
+
+    usar_lula = st.toggle(
+        "Incluir efeito de Lula",
+        value=True
+    )
+
+    pct_lula = 0.0
+    categoria_lula = "Muito fraco"
+    lula_fator = 0.0
+
+
+    if usar_lula:
+
+        l1, l2 = st.columns(2)
+
+
+        with l1:
+
+            pct_lula = st.number_input(
+                "Votação de Lula no município (%)",
+                min_value=0.0,
+                max_value=100.0,
+                value=70.0,
+                step=0.1
+            )
+
+
+        with l2:
+
+            categoria_lula = st.selectbox(
+                "Intensidade do efeito de Lula",
+                CATEGORIAS,
+                index=2
+            )
+
+            lula_fator = st.session_state[
+                f"param_lula_{categoria_lula}"
+            ]
+
+            st.metric(
+                "Fator",
+                f"{lula_fator:.2f}"
+            )
+
+
+        st.caption(
+            "O gap de Lula é calculado automaticamente em relação "
+            "ao resultado da esquerda após os efeitos anteriores."
+        )
+
+    else:
+
+        st.info(
+            "Lula não será considerado no cálculo."
+        )
+
+
+    # ========================================================
+    # CALCULAR
     # ========================================================
 
     resultado = calcular_transferencia(
 
         joao_estado=joao_estado,
-
         raquel_estado=raquel_estado,
 
+        usar_base_municipal=usar_base_municipal,
         esquerda_municipio=esquerda_municipio,
-
         direita_municipio=direita_municipio,
 
+        usar_prefeito=usar_prefeito,
         pct_prefeito=pct_prefeito,
-
         lado_prefeito=lado_prefeito,
 
+        usar_empenho=usar_empenho,
         empenho_fator=empenho_fator,
 
+        usar_avaliacao=usar_avaliacao,
         avaliacao_fator=avaliacao_fator,
 
+        usar_lula=usar_lula,
         pct_lula=pct_lula,
-
         lula_fator=lula_fator
     )
 
@@ -771,95 +813,70 @@ with aba_simulador:
     if resultado is None:
 
         st.error(
-            "As bases precisam ter soma maior que zero."
+            "As bases utilizadas precisam ter soma maior que zero."
         )
 
     else:
 
         r1, r2 = st.columns(2)
 
+        r1.metric(
+            "João Campos",
+            f"{resultado['joao_final']:.2f}%"
+        )
 
-        with r1:
+        r2.metric(
+            "Raquel Lyra",
+            f"{resultado['raquel_final']:.2f}%"
+        )
 
-            st.metric(
-                "João Campos",
-                f"{resultado['joao_final']:.2f}%"
-            )
-
-
-        with r2:
-
-            st.metric(
-                "Raquel Lyra",
-                f"{resultado['raquel_final']:.2f}%"
-            )
-
-
-        # ====================================================
-        # BARRA
-        # ====================================================
 
         st.progress(
             resultado["joao_final"] / 100,
             text=(
-                f"João {resultado['joao_final']:.1f}%"
-                f" × "
-                f"Raquel {resultado['raquel_final']:.1f}%"
+                f"João {resultado['joao_final']:.1f}% "
+                f"× Raquel {resultado['raquel_final']:.1f}%"
             )
         )
 
 
         # ====================================================
-        # EVOLUÇÃO
+        # RESUMO DOS EFEITOS
         # ====================================================
 
-        st.subheader("Evolução do cenário")
+        st.subheader("Efeitos considerados")
 
-        e1, e2, e3 = st.columns(3)
+        resumo1, resumo2, resumo3 = st.columns(3)
 
 
-        with e1:
-
-            st.markdown("#### Base municipal")
+        with resumo1:
 
             st.metric(
-                "João",
-                f"{resultado['joao_inicial']:.2f}%"
-            )
-
-            st.metric(
-                "Raquel",
-                f"{resultado['raquel_inicial']:.2f}%"
+                "Ponto de partida",
+                f"{resultado['joao_inicial']:.2f}%",
+                help="Percentual inicial de João no município."
             )
 
 
-        with e2:
-
-            st.markdown("#### Após prefeito")
+        with resumo2:
 
             st.metric(
-                "João",
-                f"{resultado['joao_apos_prefeito']:.2f}%"
+                "Efeito do prefeito",
+                f"{resultado['transferencia_prefeito']:+.2f} p.p."
+                if lado_prefeito == "Esquerda — João Campos"
+                else f"{-resultado['transferencia_prefeito']:+.2f} p.p.",
+                help=(
+                    "Positivo representa movimento para João; "
+                    "negativo representa movimento para Raquel."
+                )
             )
 
-            st.metric(
-                "Raquel",
-                f"{resultado['raquel_apos_prefeito']:.2f}%"
-            )
 
-
-        with e3:
-
-            st.markdown("#### Após Lula")
+        with resumo3:
 
             st.metric(
-                "João",
-                f"{resultado['joao_final']:.2f}%"
-            )
-
-            st.metric(
-                "Raquel",
-                f"{resultado['raquel_final']:.2f}%"
+                "Efeito de Lula",
+                f"{resultado['transferencia_lula']:+.2f} p.p."
             )
 
 
@@ -873,174 +890,156 @@ with aba_simulador:
 
 
         # ----------------------------------------------------
-        # BASE MUNICIPAL
+        # PONTO DE PARTIDA
         # ----------------------------------------------------
 
         with st.expander(
-            "1. Base estadual e municipal",
+            "1. Ponto de partida",
             expanded=True
         ):
 
             st.write(
-                f"João na Base 0 estadual: "
-                f"**{resultado['joao_estado']:.2f}%**"
-            )
-
-            st.write(
-                f"Raquel na Base 0 estadual: "
-                f"**{resultado['raquel_estado']:.2f}%**"
-            )
-
-            st.write(
-                f"Esquerda no município: "
-                f"**{resultado['esquerda_municipio']:.2f}%**"
-            )
-
-            st.write(
-                f"Direita no município: "
-                f"**{resultado['direita_municipio']:.2f}%**"
-            )
-
-            st.write(
-                f"Diferença municipal da esquerda: "
-                f"**{resultado['diferencial_municipal']:+.2f} p.p.**"
-            )
-
-            st.write("Ponto de partida local:")
-
-            c1, c2 = st.columns(2)
-
-            c1.metric(
-                "João",
-                f"{resultado['joao_inicial']:.2f}%"
-            )
-
-            c2.metric(
-                "Raquel",
-                f"{resultado['raquel_inicial']:.2f}%"
+                f"Base 0 Pernambuco: "
+                f"**João {resultado['joao_estado']:.2f}% × "
+                f"Raquel {resultado['raquel_estado']:.2f}%**"
             )
 
 
-        # ----------------------------------------------------
-        # GAP PREFEITO
-        # ----------------------------------------------------
+            if resultado["usar_base_municipal"]:
 
-        with st.expander(
-            "2. Gap do prefeito",
-            expanded=True
-        ):
+                st.write(
+                    f"Base municipal: "
+                    f"**Esquerda "
+                    f"{resultado['esquerda_municipio']:.2f}% × "
+                    f"Direita "
+                    f"{resultado['direita_municipio']:.2f}%**"
+                )
 
-            st.write(
-                f"O prefeito apoia "
-                f"**{resultado['candidato_apoiado']}**."
-            )
-
-            st.write(
-                f"Votação do prefeito: "
-                f"**{resultado['pct_prefeito']:.2f}%**"
-            )
-
-            st.write(
-                f"Base do candidato apoiado: "
-                f"**{resultado['base_apoiado']:.2f}%**"
-            )
-
-            st.code(
-                f"{resultado['pct_prefeito']:.2f} "
-                f"- "
-                f"{resultado['base_apoiado']:.2f} "
-                f"= "
-                f"{resultado['gap_prefeito_bruto']:.2f} p.p."
-            )
-
-
-            if resultado["gap_prefeito"] <= 0:
-
-                st.info(
-                    "O gap é zero ou negativo. "
-                    "Não há reserva adicional do prefeito."
+                st.write(
+                    f"Diferença municipal da esquerda: "
+                    f"**{resultado['diferencial_municipal']:+.2f} p.p.**"
                 )
 
             else:
 
+                st.info(
+                    "A base municipal não foi utilizada."
+                )
+
+
+            st.write(
+                f"Ponto de partida: "
+                f"**João {resultado['joao_inicial']:.2f}% × "
+                f"Raquel {resultado['raquel_inicial']:.2f}%**"
+            )
+
+
+        # ----------------------------------------------------
+        # PREFEITO
+        # ----------------------------------------------------
+
+        with st.expander(
+            "2. Prefeito",
+            expanded=True
+        ):
+
+            if not resultado["usar_prefeito"]:
+
+                st.info(
+                    "O efeito do prefeito não foi utilizado."
+                )
+
+            else:
+
+                st.write(
+                    f"Apoio: **{resultado['candidato_apoiado']}**"
+                )
+
+                st.write(
+                    f"Votação do prefeito: "
+                    f"**{resultado['pct_prefeito']:.2f}%**"
+                )
+
+                st.write(
+                    f"Base do candidato apoiado: "
+                    f"**{resultado['base_apoiado']:.2f}%**"
+                )
+
+                st.code(
+                    f"{resultado['pct_prefeito']:.2f} "
+                    f"- {resultado['base_apoiado']:.2f} "
+                    f"= {resultado['gap_prefeito_bruto']:.2f} p.p."
+                )
+
+                st.write(
+                    f"Gap positivo disponível: "
+                    f"**{resultado['gap_prefeito']:.2f} p.p.**"
+                )
+
+
+                # EMPENHO
+
+                if resultado["usar_empenho"]:
+
+                    st.write(
+                        f"Empenho: **{categoria_empenho} "
+                        f"({resultado['empenho_fator']:.2f})**"
+                    )
+
+                    st.code(
+                        f"{resultado['gap_prefeito']:.2f} "
+                        f"× {resultado['empenho_fator']:.2f} "
+                        f"= {resultado['transferencia_empenho']:.2f} p.p."
+                    )
+
+                else:
+
+                    st.write(
+                        "**Empenho:** não utilizado."
+                    )
+
+
+                # AVALIAÇÃO
+
+                if resultado["usar_avaliacao"]:
+
+                    st.write(
+                        f"Gap restante após empenho: "
+                        f"**{resultado['gap_apos_empenho']:.2f} p.p.**"
+                    )
+
+                    st.write(
+                        f"Avaliação: **{categoria_avaliacao} "
+                        f"({resultado['avaliacao_fator']:.2f})**"
+                    )
+
+                    st.code(
+                        f"{resultado['gap_apos_empenho']:.2f} "
+                        f"× {resultado['avaliacao_fator']:.2f} "
+                        f"= "
+                        f"{resultado['transferencia_avaliacao']:.2f} p.p."
+                    )
+
+                else:
+
+                    st.write(
+                        "**Avaliação:** não utilizada."
+                    )
+
+
                 st.success(
-                    f"Gap disponível: "
-                    f"{resultado['gap_prefeito']:.2f} p.p."
+                    f"Efeito total do prefeito: "
+                    f"{resultado['transferencia_prefeito']:.2f} p.p. "
+                    f"para {resultado['candidato_apoiado']}."
                 )
 
 
         # ----------------------------------------------------
-        # EMPENHO
+        # RESULTADO ANTES DE LULA
         # ----------------------------------------------------
 
         with st.expander(
-            "3. Empenho do prefeito",
-            expanded=True
-        ):
-
-            st.write(
-                f"Classificação: "
-                f"**{categoria_empenho}**"
-            )
-
-            st.write(
-                f"Fator utilizado: "
-                f"**{resultado['empenho_fator']:.2f}**"
-            )
-
-            st.code(
-                f"{resultado['gap_prefeito']:.2f} "
-                f"× "
-                f"{resultado['empenho_fator']:.2f} "
-                f"= "
-                f"{resultado['transferencia_empenho']:.2f} p.p."
-            )
-
-            st.write(
-                f"Transferência após empenho: "
-                f"**{resultado['transferencia_empenho']:.2f} p.p.**"
-            )
-
-
-        # ----------------------------------------------------
-        # AVALIAÇÃO
-        # ----------------------------------------------------
-
-        with st.expander(
-            "4. Avaliação do prefeito",
-            expanded=True
-        ):
-
-            st.write(
-                f"Classificação: "
-                f"**{categoria_avaliacao}**"
-            )
-
-            st.write(
-                f"Fator utilizado: "
-                f"**{resultado['avaliacao_fator']:.2f}**"
-            )
-
-            st.code(
-                f"{resultado['transferencia_empenho']:.2f} "
-                f"× "
-                f"{resultado['avaliacao_fator']:.2f} "
-                f"= "
-                f"{resultado['transferencia_prefeito']:.2f} p.p."
-            )
-
-            st.success(
-                f"Transferência efetiva do prefeito: "
-                f"{resultado['transferencia_prefeito']:.2f} p.p."
-            )
-
-
-        # ----------------------------------------------------
-        # ANTES DE LULA
-        # ----------------------------------------------------
-
-        with st.expander(
-            "5. Resultado antes de Lula",
+            "3. Resultado antes de Lula",
             expanded=True
         ):
 
@@ -1062,65 +1061,64 @@ with aba_simulador:
         # ----------------------------------------------------
 
         with st.expander(
-            "6. Gap de Lula",
+            "4. Lula",
             expanded=True
         ):
 
-            st.write(
-                f"Lula no município: "
-                f"**{resultado['pct_lula']:.2f}%**"
-            )
-
-            st.write(
-                f"João após as transferências anteriores: "
-                f"**{resultado['joao_apos_prefeito']:.2f}%**"
-            )
-
-            st.code(
-                f"{resultado['pct_lula']:.2f} "
-                f"- "
-                f"{resultado['joao_apos_prefeito']:.2f} "
-                f"= "
-                f"{resultado['gap_lula_bruto']:.2f} p.p."
-            )
-
-
-            if resultado["gap_lula"] <= 0:
+            if not resultado["usar_lula"]:
 
                 st.info(
-                    "O gap de Lula é zero ou negativo. "
-                    "Lula não entra no cálculo."
+                    "O efeito de Lula não foi utilizado."
                 )
 
             else:
 
                 st.write(
-                    f"Gap positivo de Lula: "
-                    f"**{resultado['gap_lula']:.2f} p.p.**"
+                    f"Lula no município: "
+                    f"**{resultado['pct_lula']:.2f}%**"
                 )
 
                 st.write(
-                    f"Classificação: "
-                    f"**{categoria_lula}**"
-                )
-
-                st.write(
-                    f"Fator utilizado: "
-                    f"**{resultado['lula_fator']:.2f}**"
+                    f"João antes de Lula: "
+                    f"**{resultado['joao_apos_prefeito']:.2f}%**"
                 )
 
                 st.code(
-                    f"{resultado['gap_lula']:.2f} "
-                    f"× "
-                    f"{resultado['lula_fator']:.2f} "
-                    f"= "
-                    f"{resultado['transferencia_lula']:.2f} p.p."
+                    f"{resultado['pct_lula']:.2f} "
+                    f"- {resultado['joao_apos_prefeito']:.2f} "
+                    f"= {resultado['gap_lula_bruto']:.2f} p.p."
                 )
 
-                st.success(
-                    f"Transferência adicional para João: "
-                    f"{resultado['transferencia_lula']:.2f} p.p."
-                )
+
+                if resultado["gap_lula"] <= 0:
+
+                    st.info(
+                        "O gap é zero ou negativo. "
+                        "Lula não acrescenta votos ao cenário."
+                    )
+
+                else:
+
+                    st.write(
+                        f"Gap positivo: "
+                        f"**{resultado['gap_lula']:.2f} p.p.**"
+                    )
+
+                    st.write(
+                        f"Intensidade: **{categoria_lula} "
+                        f"({resultado['lula_fator']:.2f})**"
+                    )
+
+                    st.code(
+                        f"{resultado['gap_lula']:.2f} "
+                        f"× {resultado['lula_fator']:.2f} "
+                        f"= {resultado['transferencia_lula']:.2f} p.p."
+                    )
+
+                    st.success(
+                        f"Efeito de Lula sobre João: "
+                        f"+{resultado['transferencia_lula']:.2f} p.p."
+                    )
 
 
 # ============================================================
@@ -1133,18 +1131,17 @@ with aba_parametros:
 
     st.write(
         "Cada variável possui sua própria escala. "
-        "Alterar um valor de empenho, por exemplo, "
-        "não altera a escala de avaliação ou de Lula."
+        "Os valores sugeridos podem ser alterados livremente."
     )
 
     st.info(
-        "Os valores são usados apenas nesta sessão. "
-        "Nenhuma alteração é salva em banco de dados."
+        "As alterações valem apenas para esta sessão. "
+        "Nenhum parâmetro é salvo em banco de dados."
     )
 
 
     # ========================================================
-    # FUNÇÃO PARA CRIAR EDITOR
+    # EDITOR
     # ========================================================
 
     def criar_editor_parametros(
@@ -1170,19 +1167,10 @@ with aba_parametros:
                 st.number_input(
                     "Fator",
                     min_value=0.0,
-
-                    # permite valores bem acima de 1
                     max_value=10.0,
-
                     step=0.05,
                     format="%.2f",
-
-                    key=(
-                        f"param_"
-                        f"{variavel}_"
-                        f"{categoria}"
-                    ),
-
+                    key=f"param_{variavel}_{categoria}",
                     label_visibility="collapsed"
                 )
 
@@ -1192,13 +1180,10 @@ with aba_parametros:
     # ========================================================
 
     criar_editor_parametros(
-        titulo="Empenho do prefeito",
-        variavel="empenho",
-        descricao=(
-            "Define quanto do gap do prefeito é mobilizado."
-        )
+        "Empenho do prefeito",
+        "empenho",
+        "Quanto do gap disponível é mobilizado pelo empenho."
     )
-
 
     st.divider()
 
@@ -1208,14 +1193,10 @@ with aba_parametros:
     # ========================================================
 
     criar_editor_parametros(
-        titulo="Avaliação do prefeito",
-        variavel="avaliacao",
-        descricao=(
-            "Define como a avaliação potencializa ou reduz "
-            "a transferência produzida pelo empenho."
-        )
+        "Avaliação do prefeito",
+        "avaliacao",
+        "Quanto do gap restante é mobilizado pela avaliação."
     )
-
 
     st.divider()
 
@@ -1225,92 +1206,14 @@ with aba_parametros:
     # ========================================================
 
     criar_editor_parametros(
-        titulo="Efeito de Lula",
-        variavel="lula",
-        descricao=(
-            "Define quanto do gap positivo de Lula é "
-            "convertido em transferência para João."
-        )
+        "Efeito de Lula",
+        "lula",
+        "Quanto do gap positivo de Lula é transferido para João."
     )
 
 
     # ========================================================
-    # RESUMO
-    # ========================================================
-
-    st.divider()
-
-    st.subheader("Resumo das escalas atuais")
-
-
-    # --------------------------------------------------------
-    # EMPENHO
-    # --------------------------------------------------------
-
-    st.markdown("#### Empenho")
-
-    st.dataframe(
-        {
-            "Classificação": CATEGORIAS,
-
-            "Fator": [
-                st.session_state[
-                    f"param_empenho_{categoria}"
-                ]
-                for categoria in CATEGORIAS
-            ]
-        },
-        hide_index=True,
-        use_container_width=True
-    )
-
-
-    # --------------------------------------------------------
-    # AVALIAÇÃO
-    # --------------------------------------------------------
-
-    st.markdown("#### Avaliação")
-
-    st.dataframe(
-        {
-            "Classificação": CATEGORIAS,
-
-            "Fator": [
-                st.session_state[
-                    f"param_avaliacao_{categoria}"
-                ]
-                for categoria in CATEGORIAS
-            ]
-        },
-        hide_index=True,
-        use_container_width=True
-    )
-
-
-    # --------------------------------------------------------
-    # LULA
-    # --------------------------------------------------------
-
-    st.markdown("#### Lula")
-
-    st.dataframe(
-        {
-            "Classificação": CATEGORIAS,
-
-            "Fator": [
-                st.session_state[
-                    f"param_lula_{categoria}"
-                ]
-                for categoria in CATEGORIAS
-            ]
-        },
-        hide_index=True,
-        use_container_width=True
-    )
-
-
-    # ========================================================
-    # RESTAURAR PADRÕES
+    # RESTAURAR
     # ========================================================
 
     st.divider()
@@ -1332,7 +1235,7 @@ with aba_parametros:
 
 
     st.caption(
-        "Valores sugeridos inicialmente: "
+        "Sugestões iniciais: "
         "Muito fraco = 0,00 | "
         "Fraco = 0,10 | "
         "Moderado = 0,50 | "
