@@ -342,6 +342,11 @@ def obter_fator_pesquisa(gap):
 # FUNÇÃO - APLICAR PESQUISA
 # ============================================================
 
+# ============================================================
+# FUNÇÃO - APLICAR PESQUISA
+# A pesquisa pode aumentar OU reduzir João Campos
+# ============================================================
+
 def aplicar_pesquisa(
     joao_atual,
     raquel_atual,
@@ -350,7 +355,7 @@ def aplicar_pesquisa(
 ):
 
     # --------------------------------------------------------
-    # Normaliza a pesquisa
+    # 1. NORMALIZA A PESQUISA
     # --------------------------------------------------------
 
     pesquisa_joao, pesquisa_raquel = normalizar(
@@ -363,69 +368,28 @@ def aplicar_pesquisa(
 
 
     # --------------------------------------------------------
-    # IDENTIFICA QUEM ESTÁ GANHANDO NA PESQUISA
-    # --------------------------------------------------------
-
-    if pesquisa_joao > pesquisa_raquel:
-
-        lider = "João Campos"
-
-        pct_lider_pesquisa = pesquisa_joao
-        pct_lider_simulacao = joao_atual
-
-
-    elif pesquisa_raquel > pesquisa_joao:
-
-        lider = "Raquel Lyra"
-
-        pct_lider_pesquisa = pesquisa_raquel
-        pct_lider_simulacao = raquel_atual
-
-
-    else:
-
-        return {
-
-            "lider": "Empate",
-
-            "pesquisa_joao": pesquisa_joao,
-            "pesquisa_raquel": pesquisa_raquel,
-
-            "pct_lider_pesquisa": 0.0,
-            "pct_lider_simulacao": 0.0,
-
-            "gap_bruto": 0.0,
-            "gap": 0.0,
-
-            "faixa": None,
-            "fator": 0.0,
-
-            "efeito": 0.0,
-
-            "joao_final": joao_atual,
-            "raquel_final": raquel_atual
-        }
-
-
-    # --------------------------------------------------------
-    # GAP DA PESQUISA
+    # 2. DIFERENÇA ENTRE PESQUISA E SIMULAÇÃO DE JOÃO
+    #
+    # Positivo = pesquisa melhora João
+    # Negativo = pesquisa piora João
     # --------------------------------------------------------
 
     gap_bruto = (
-        pct_lider_pesquisa
+        pesquisa_joao
         -
-        pct_lider_simulacao
+        joao_atual
     )
 
 
     # --------------------------------------------------------
-    # SE A PESQUISA FOR MENOR QUE A SIMULAÇÃO,
-    # NÃO HÁ EFEITO
+    # 3. TAMANHO ABSOLUTO DO GAP
+    #
+    # A faixa do parâmetro depende do tamanho da diferença,
+    # independentemente de ela ser positiva ou negativa.
     # --------------------------------------------------------
 
-    gap = max(
-        gap_bruto,
-        0.0
+    gap_absoluto = abs(
+        gap_bruto
     )
 
 
@@ -435,74 +399,94 @@ def aplicar_pesquisa(
 
 
     # --------------------------------------------------------
-    # CALCULAR EFEITO
+    # 4. CALCULAR O EFEITO DA PESQUISA
     # --------------------------------------------------------
 
-    if gap > 0:
+    if gap_absoluto > 0:
 
         fator, faixa = obter_fator_pesquisa(
-            gap
+            gap_absoluto
         )
 
+        # IMPORTANTE:
+        # usamos gap_bruto, e não gap_absoluto,
+        # para preservar o sinal positivo ou negativo.
         efeito = (
-            gap
+            gap_bruto
             *
             fator
         )
 
 
     # --------------------------------------------------------
-    # APLICAÇÃO AO CANDIDATO QUE GANHA A PESQUISA
+    # 5. APLICAR O EFEITO A JOÃO
     # --------------------------------------------------------
 
-    if lider == "João Campos":
+    joao_final = limitar(
+        joao_atual
+        +
+        efeito
+    )
 
-        joao_final = limitar(
-            joao_atual
-            +
-            efeito
-        )
+    raquel_final = (
+        100
+        -
+        joao_final
+    )
 
-        raquel_final = (
-            100
-            -
-            joao_final
-        )
 
+    # --------------------------------------------------------
+    # 6. IDENTIFICAR DIREÇÃO DO EFEITO
+    # --------------------------------------------------------
+
+    if efeito > 0:
+
+        direcao = "Positivo para João Campos"
+
+    elif efeito < 0:
+
+        direcao = "Negativo para João Campos"
 
     else:
 
-        raquel_final = limitar(
-            raquel_atual
-            +
-            efeito
-        )
+        direcao = "Sem efeito"
 
-        joao_final = (
-            100
-            -
-            raquel_final
-        )
 
+    # --------------------------------------------------------
+    # 7. RETORNO
+    # --------------------------------------------------------
 
     return {
 
-        "lider": lider,
+        "lider":
+            (
+                "João Campos"
+                if pesquisa_joao > pesquisa_raquel
+                else
+                "Raquel Lyra"
+                if pesquisa_raquel > pesquisa_joao
+                else
+                "Empate"
+            ),
 
-        "pesquisa_joao": pesquisa_joao,
-        "pesquisa_raquel": pesquisa_raquel,
+        "pesquisa_joao":
+            pesquisa_joao,
 
+        "pesquisa_raquel":
+            pesquisa_raquel,
+
+        # Mantidos para compatibilidade com o restante do app
         "pct_lider_pesquisa":
-            pct_lider_pesquisa,
+            pesquisa_joao,
 
         "pct_lider_simulacao":
-            pct_lider_simulacao,
+            joao_atual,
 
         "gap_bruto":
             gap_bruto,
 
         "gap":
-            gap,
+            gap_absoluto,
 
         "faixa":
             faixa,
@@ -512,6 +496,9 @@ def aplicar_pesquisa(
 
         "efeito":
             efeito,
+
+        "direcao":
+            direcao,
 
         "joao_final":
             joao_final,
