@@ -353,158 +353,102 @@ def aplicar_pesquisa(
     pesquisa_joao,
     pesquisa_raquel
 ):
+    """
+    A pesquisa pode aumentar ou reduzir João.
 
-    # --------------------------------------------------------
-    # 1. NORMALIZA A PESQUISA
-    # --------------------------------------------------------
+    A pesquisa é mantida na régua original (João + Raquel + demais = 100).
+    Como a simulação trabalha no duelo João x Raquel = 100, convertemos
+    João simulado para a mesma régua da pesquisa antes de calcular o gap.
+    """
 
-    pesquisa_joao, pesquisa_raquel = normalizar(
-        pesquisa_joao,
-        pesquisa_raquel
-    )
+    # Valores informados na pesquisa NÃO são normalizados entre João e Raquel.
+    # O restante é preservado como "demais candidatos".
+    total_dois = pesquisa_joao + pesquisa_raquel
 
-    if pesquisa_joao is None:
+    if total_dois <= 0 or total_dois > 100:
         return None
 
+    demais_pesquisa = max(0.0, 100.0 - total_dois)
+    peso_duelo_pesquisa = total_dois / 100.0
 
-    # --------------------------------------------------------
-    # 2. DIFERENÇA ENTRE PESQUISA E SIMULAÇÃO DE JOÃO
-    #
-    # Positivo = pesquisa melhora João
-    # Negativo = pesquisa piora João
-    # --------------------------------------------------------
+    # Coloca a simulação (duelo = 100) na mesma régua da pesquisa.
+    joao_simulacao_na_regua_pesquisa = joao_atual * peso_duelo_pesquisa
+    raquel_simulacao_na_regua_pesquisa = raquel_atual * peso_duelo_pesquisa
 
-    gap_bruto = (
-        pesquisa_joao
-        -
-        joao_atual
-    )
-
-
-    # --------------------------------------------------------
-    # 3. TAMANHO ABSOLUTO DO GAP
-    #
-    # A faixa do parâmetro depende do tamanho da diferença,
-    # independentemente de ela ser positiva ou negativa.
-    # --------------------------------------------------------
-
-    gap_absoluto = abs(
-        gap_bruto
-    )
-
+    # Gap de João na régua completa da pesquisa.
+    gap_bruto = pesquisa_joao - joao_simulacao_na_regua_pesquisa
+    gap_absoluto = abs(gap_bruto)
 
     faixa = None
     fator = 0.0
-    efeito = 0.0
-
-
-    # --------------------------------------------------------
-    # 4. CALCULAR O EFEITO DA PESQUISA
-    # --------------------------------------------------------
+    efeito_regua_pesquisa = 0.0
 
     if gap_absoluto > 0:
+        fator, faixa = obter_fator_pesquisa(gap_absoluto)
+        efeito_regua_pesquisa = gap_bruto * fator
 
-        fator, faixa = obter_fator_pesquisa(
-            gap_absoluto
-        )
-
-        # IMPORTANTE:
-        # usamos gap_bruto, e não gap_absoluto,
-        # para preservar o sinal positivo ou negativo.
-        efeito = (
-            gap_bruto
-            *
-            fator
-        )
-
-
-    # --------------------------------------------------------
-    # 5. APLICAR O EFEITO A JOÃO
-    # --------------------------------------------------------
-
-    joao_final = limitar(
-        joao_atual
-        +
-        efeito
+    # Aplica o efeito ainda na régua completa.
+    joao_ajustado_regua_pesquisa = limitar(
+        joao_simulacao_na_regua_pesquisa + efeito_regua_pesquisa
     )
 
-    raquel_final = (
-        100
-        -
-        joao_final
+    # "Demais" permanece fixo; Raquel absorve a contrapartida.
+    raquel_ajustada_regua_pesquisa = (
+        100.0 - demais_pesquisa - joao_ajustado_regua_pesquisa
+    )
+    raquel_ajustada_regua_pesquisa = max(0.0, raquel_ajustada_regua_pesquisa)
+
+    # Volta para a régua do duelo usada pelo restante do simulador.
+    total_ajustado_duelo = (
+        joao_ajustado_regua_pesquisa + raquel_ajustada_regua_pesquisa
     )
 
+    if total_ajustado_duelo <= 0:
+        return None
 
-    # --------------------------------------------------------
-    # 6. IDENTIFICAR DIREÇÃO DO EFEITO
-    # --------------------------------------------------------
+    joao_final = joao_ajustado_regua_pesquisa / total_ajustado_duelo * 100.0
+    raquel_final = 100.0 - joao_final
+
+    # Efeito efetivo na régua do simulador.
+    efeito = joao_final - joao_atual
 
     if efeito > 0:
-
         direcao = "Positivo para João Campos"
-
     elif efeito < 0:
-
         direcao = "Negativo para João Campos"
-
     else:
-
         direcao = "Sem efeito"
 
-
-    # --------------------------------------------------------
-    # 7. RETORNO
-    # --------------------------------------------------------
+    lider = (
+        "João Campos"
+        if pesquisa_joao > pesquisa_raquel
+        else "Raquel Lyra"
+        if pesquisa_raquel > pesquisa_joao
+        else "Empate"
+    )
 
     return {
+        "lider": lider,
+        "pesquisa_joao": pesquisa_joao,
+        "pesquisa_raquel": pesquisa_raquel,
+        "demais_pesquisa": demais_pesquisa,
+        "peso_duelo_pesquisa": peso_duelo_pesquisa,
+        "joao_simulacao_na_regua_pesquisa": joao_simulacao_na_regua_pesquisa,
+        "raquel_simulacao_na_regua_pesquisa": raquel_simulacao_na_regua_pesquisa,
 
-        "lider":
-            (
-                "João Campos"
-                if pesquisa_joao > pesquisa_raquel
-                else
-                "Raquel Lyra"
-                if pesquisa_raquel > pesquisa_joao
-                else
-                "Empate"
-            ),
+        # Chaves mantidas para compatibilidade com o restante do app.
+        "pct_lider_pesquisa": pesquisa_joao,
+        "pct_lider_simulacao": joao_simulacao_na_regua_pesquisa,
 
-        "pesquisa_joao":
-            pesquisa_joao,
-
-        "pesquisa_raquel":
-            pesquisa_raquel,
-
-        # Mantidos para compatibilidade com o restante do app
-        "pct_lider_pesquisa":
-            pesquisa_joao,
-
-        "pct_lider_simulacao":
-            joao_atual,
-
-        "gap_bruto":
-            gap_bruto,
-
-        "gap":
-            gap_absoluto,
-
-        "faixa":
-            faixa,
-
-        "fator":
-            fator,
-
-        "efeito":
-            efeito,
-
-        "direcao":
-            direcao,
-
-        "joao_final":
-            joao_final,
-
-        "raquel_final":
-            raquel_final
+        "gap_bruto": gap_bruto,
+        "gap": gap_absoluto,
+        "faixa": faixa,
+        "fator": fator,
+        "efeito_regua_pesquisa": efeito_regua_pesquisa,
+        "efeito": efeito,
+        "direcao": direcao,
+        "joao_final": joao_final,
+        "raquel_final": raquel_final
     }
 
 
@@ -1576,9 +1520,9 @@ with aba_simulador:
 
 
         st.caption(
-            "O sistema identifica automaticamente quem está "
-            "ganhando na pesquisa. O fator é aplicado somente "
-            "ao gap positivo desse candidato."
+            "A pesquisa preserva os demais candidatos. João e Raquel não são "
+            "normalizados automaticamente para 100%. A simulação é colocada "
+            "na mesma régua da pesquisa e o fator pode aumentar ou reduzir João."
         )
 
 
@@ -2098,168 +2042,106 @@ with aba_simulador:
             expanded=True
         ):
 
-
             if not resultado["usar_pesquisa"]:
 
                 st.info(
                     "O efeito da pesquisa não foi utilizado."
                 )
 
-
             else:
-
 
                 st.write(
                     f"Abrangência: "
                     f"**{resultado['abrangencia_pesquisa']}**"
                 )
 
-
                 st.write(
-                    f"Pesquisa: "
+                    f"Pesquisa informada: "
                     f"**João {pesquisa_joao:.2f}% x "
                     f"Raquel {pesquisa_raquel:.2f}%**"
                 )
 
-
-                # --------------------------------------------
-                # SELECIONAR A PESQUISA CORRETA
-                # --------------------------------------------
-
                 if abrangencia_pesquisa == "Município":
-
-                    rp = resultado[
-                        "resultado_pesquisa_municipal"
-                    ]
-
-
+                    rp = resultado["resultado_pesquisa_municipal"]
                 elif abrangencia_pesquisa == "Região":
+                    rp = resultado["resultado_pesquisa_regional"]
+                else:
+                    rp = resultado["resultado_pesquisa_estadual"]
 
-                    rp = resultado[
-                        "resultado_pesquisa_regional"
-                    ]
+                if rp is None:
 
+                    st.warning(
+                        "A pesquisa precisa ter João + Raquel maior que 0 "
+                        "e menor ou igual a 100%."
+                    )
 
                 else:
 
-                    rp = resultado[
-                        "resultado_pesquisa_estadual"
-                    ]
+                    st.write(
+                        f"Demais candidatos / restante da pesquisa: "
+                        f"**{rp['demais_pesquisa']:.2f}%**"
+                    )
 
+                    st.caption(
+                        "Os demais candidatos são preservados. "
+                        "Por isso João e Raquel não são reescalados "
+                        "diretamente para somarem 100% antes do cálculo."
+                    )
 
-                if rp is not None:
+                    st.write(
+                        f"João na simulação antes da pesquisa "
+                        f"(convertido para a régua da pesquisa): "
+                        f"**{rp['joao_simulacao_na_regua_pesquisa']:.2f}%**"
+                    )
 
+                    st.code(
+                        f"{rp['pesquisa_joao']:.2f} "
+                        f"- {rp['joao_simulacao_na_regua_pesquisa']:.2f} "
+                        f"= {rp['gap_bruto']:+.2f} p.p."
+                    )
 
-                    # ----------------------------------------
-                    # EMPATE
-                    # ----------------------------------------
-
-                    if rp["lider"] == "Empate":
+                    if rp["gap"] == 0:
 
                         st.info(
-                            "A pesquisa está empatada. "
-                            "Nenhum candidato recebe efeito."
+                            "A pesquisa não altera João porque o gap é zero."
                         )
-
-
-                    # ----------------------------------------
-                    # TEM VENCEDOR
-                    # ----------------------------------------
 
                     else:
 
-
                         st.write(
-                            f"Candidato que lidera a pesquisa: "
-                            f"**{rp['lider']}**"
+                            f"Tamanho do gap para definição da faixa: "
+                            f"**{rp['gap']:.2f} p.p.**"
                         )
 
-
                         st.write(
-                            f"{rp['lider']} na pesquisa: "
-                            f"**{rp['pct_lider_pesquisa']:.2f}%**"
+                            f"Direção: **{rp['direcao']}**"
                         )
 
-
                         st.write(
-                            f"{rp['lider']} na simulação antes "
-                            f"da pesquisa: "
-                            f"**{rp['pct_lider_simulacao']:.2f}%**"
+                            f"Faixa: **{rp['faixa']}**"
                         )
 
+                        st.write(
+                            f"Fator: **{rp['fator']:.2f}**"
+                        )
 
                         st.code(
-                            f"{rp['pct_lider_pesquisa']:.2f} "
-                            f"- "
-                            f"{rp['pct_lider_simulacao']:.2f} "
-                            f"= "
-                            f"{rp['gap_bruto']:.2f} p.p."
+                            f"{rp['gap_bruto']:+.2f} "
+                            f"x {rp['fator']:.2f} "
+                            f"= {rp['efeito_regua_pesquisa']:+.2f} p.p. "
+                            f"na régua da pesquisa"
                         )
 
+                        st.write(
+                            f"Efeito efetivo após retornar ao duelo João x Raquel: "
+                            f"**{rp['efeito']:+.2f} p.p.**"
+                        )
 
-                        # ------------------------------------
-                        # SEM EFEITO
-                        # ------------------------------------
-
-                        if rp["gap"] <= 0:
-
-                            st.info(
-                                f"{rp['lider']} já possui na "
-                                f"simulação um percentual igual ou "
-                                f"superior ao resultado da pesquisa. "
-                                f"Portanto, a pesquisa não produz efeito."
-                            )
-
-
-                        # ------------------------------------
-                        # COM EFEITO
-                        # ------------------------------------
-
-                        else:
-
-
-                            st.write(
-                                f"Gap positivo: "
-                                f"**{rp['gap']:.2f} p.p.**"
-                            )
-
-
-                            st.write(
-                                f"Faixa: "
-                                f"**{rp['faixa']}**"
-                            )
-
-
-                            st.write(
-                                f"Fator: "
-                                f"**{rp['fator']:.2f}**"
-                            )
-
-
-                            st.code(
-                                f"{rp['gap']:.2f} "
-                                f"x "
-                                f"{rp['fator']:.2f} "
-                                f"= "
-                                f"{rp['efeito']:.2f} p.p."
-                            )
-
-
-                            st.success(
-                                f"A pesquisa acrescenta "
-                                f"{rp['efeito']:.2f} p.p. "
-                                f"a {rp['lider']}."
-                            )
-
-
-                            st.write(
-                                f"Resultado após a pesquisa: "
-                                f"**João "
-                                f"{rp['joao_final']:.2f}% x "
-                                f"Raquel "
-                                f"{rp['raquel_final']:.2f}%**"
-                            )
-
+                    st.write(
+                        f"Resultado após a pesquisa: "
+                        f"**João {rp['joao_final']:.2f}% x "
+                        f"Raquel {rp['raquel_final']:.2f}%**"
+                    )
 
 
         # ====================================================
@@ -2413,8 +2295,8 @@ with aba_parametros:
     st.subheader("Efeito da pesquisa")
 
     st.caption(
-        "O fator é aplicado ao gap positivo do candidato "
-        "que estiver ganhando na pesquisa."
+        "O fator é aplicado ao gap de João entre a pesquisa e a simulação "
+        "na mesma régua. O efeito pode ser positivo ou negativo."
     )
 
 
